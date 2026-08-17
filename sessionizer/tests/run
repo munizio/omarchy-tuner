@@ -50,7 +50,7 @@ assert_eq "name colons to underscores" "$(sessionizer_name /tmp/foo:bar)" "foo_b
 assert_eq "name trailing slash" "$(sessionizer_name /tmp/proj/)" "proj"
 assert_eq "name strips leading dot" "$(sessionizer_name /tmp/.config)" "config"
 
-# --- directory listing, depth 1, hidden skipped ---
+# --- directory listing, depth 1 ---
 mkdir -p "$WORKDIR/Work/oh-my-pi" "$WORKDIR/Work/sessionizer" "$WORKDIR/Work/tries/nested" "$WORKDIR/Work/.hidden" "$WORKDIR/.config/sessionizer"
 SESSIONIZER_ROOTS=("$WORKDIR/Work")
 SESSIONIZER_DEPTH=1
@@ -60,7 +60,7 @@ assert_ok "lists oh-my-pi" 'grep -qx "$WORKDIR/Work/oh-my-pi" <<<"$joined"'
 assert_ok "lists sessionizer" 'grep -qx "$WORKDIR/Work/sessionizer" <<<"$joined"'
 assert_ok "lists tries as one row" 'grep -qx "$WORKDIR/Work/tries" <<<"$joined"'
 assert_ok "does not recurse into tries" '! grep -q "$WORKDIR/Work/tries/nested" <<<"$joined"'
-assert_ok "skips hidden dirs" '! grep -q "$WORKDIR/Work/.hidden" <<<"$joined"'
+assert_ok "lists hidden dirs" 'grep -qx "$WORKDIR/Work/.hidden" <<<"$joined"'
 assert_ok "omits extras when unset" '! grep -q "$WORKDIR/.config" <<<"$joined"'
 
 # --- extras are listed as themselves, including hidden names ---

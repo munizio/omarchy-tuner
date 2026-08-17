@@ -198,7 +198,6 @@ sessionizer_name() {
 }
 
 # Extra rows that are themselves sessions (not scanned for children).
-# Hidden names are allowed here; find-pruning applies only to ROOTS.
 sessionizer_list_extras() {
   local extra
   [[ -v SESSIONIZER_EXTRAS ]] || return 0
@@ -216,7 +215,7 @@ sessionizer_list_dirs() {
   for root in "${SESSIONIZER_ROOTS[@]}"; do
     root="${root/#\~/$HOME}"
     [[ -d $root ]] || continue
-    find "$root" -mindepth 1 -maxdepth "$depth" \( -name '.*' -prune \) -o -type d -print | sort
+    find "$root" -mindepth 1 -maxdepth "$depth" -type d | sort
   done
 }
 

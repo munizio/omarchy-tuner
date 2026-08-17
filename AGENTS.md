@@ -92,8 +92,8 @@ sessionizer --no-sessions   # hide the [tmux] / [herdr] rows (combine with --lis
 sessionizer-harness --list
 ```
 
-Default roots: immediate children of `~/Work` (`SESSIONIZER_DEPTH=1`). Hidden
-dirs are pruned. `tries` is one row, not its children. `~/.config` is also
+Default roots: immediate children of `~/Work` (`SESSIONIZER_DEPTH=1`), including
+hidden dirs. `tries` is one row, not its children. `~/.config` is also
 one row (`SESSIONIZER_EXTRAS`); its children are not listed.
 
 Session name = `basename` with a leading `.` stripped, then `.` and `:` → `_`
