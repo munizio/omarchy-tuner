@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+# Idempotent installer. Safe to re-run. Use --check to report drift only.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SZ="$ROOT/sessionizer"
+CHECK=0
+
+usage() {
+  cat <<'EOF'
+Usage: ./install [--check]
+
+  Install omarchy-tuner onto this Omarchy machine (symlinks + marked config blocks).
+  --check   Report what would change; exit 1 if anything is missing or stale.
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  --check)
+    CHECK=1
+    ;;
+  *)
+    echo "install: unknown option: $1" >&2
+    usage >&2
+    exit 1
+    ;;
+  esac
+  shift
+done
+
+drift=0
+note() { printf '%s\n' "$*"; }
+warn() { printf 'install: %s\n' "$*" >&2; }
+
+is_check() { [[ $CHECK -eq 1 ]]; }
+
+mark_begin="# omarchy-tuner:begin"
+mark_end="# omarchy-tuner:end"
+lua_begin="-- omarchy-tuner:begin"
+lua_end="-- omarchy-tuner:end"
+
+# Pre-rename markers. Migrated on install so old blocks are not left behind.
+old_mark_begin="# sessionizer:begin"
+old_mark_end="# sessionizer:end"
+old_lua_begin="-- sessionizer:begin"
+old_lua_end="-- sessionizer:end"
+prev_mark_begin="# omarchy-tune:begin"
+prev_mark_end="# omarchy-tune:end"
+prev_lua_begin="-- omarchy-tune:begin"
+prev_lua_end="-- omarchy-tune:end"
+
+ensure_symlink() {
+  local src="$1" dest="$2"
+  if is_check; then
+    if [[ -L $dest && $(readlink -f "$dest") == "$(readlink -f "$src")" ]]; then
+      note "ok  symlink $dest"
+    else
+      warn "missing or stale symlink $dest"
+      drift=1
+    fi
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  if [[ -e $dest && ! -L $dest ]]; then
+    warn "refusing to overwrite non-symlink $dest"
+    exit 1
+  fi
+  ln -sfn "$src" "$dest"
+  note "linked $dest -> $src"
+}
+
+# Delete a marked block (and the blank line immediately before it, if any).
+remove_block() {
+  local file="$1" begin="$2" end="$3"
+  [[ -f $file ]] || return 0
+  grep -qF -- "$begin" "$file" || return 0
+  if is_check; then
+    warn "legacy block $begin in $file"
+    drift=1
+    return 0
+  fi
+  local tmp
+  tmp="$(mktemp)"
+  awk -v begin="$begin" -v end="$end" '
+    $0 == begin { skip=1; prev_blank=0; next }
+    $0 == end && skip { skip=0; next }
+    skip { next }
+    { print }
+  ' "$file" >"$tmp"
+  mv "$tmp" "$file"
+  note "removed legacy block from $file"
+}
+
+# Replace or append a marked block in a text file.
+upsert_block() {
+  local file="$1" begin="$2" end="$3" body="$4"
+  local expected current tmp
+  expected=$(printf '%s\n%s\n%s\n' "$begin" "$body" "$end")
+
+  if [[ -f $file ]] && grep -qF -- "$begin" "$file"; then
+    current="$(awk -v begin="$begin" -v end="$end" '
+      $0 == begin { skip=1; print; next }
+      $0 == end && skip { print; skip=0; next }
+      skip { print }
+    ' "$file")"
+    if [[ $current == "$expected" ]]; then
+      if is_check; then
+        note "ok  block in $file"
+      fi
+      return 0
+    fi
+    if is_check; then
+      warn "stale block in $file"
+      drift=1
+      return 0
+    fi
+    tmp="$(mktemp)"
+    awk -v begin="$begin" -v end="$end" -v body="$body" '
+      $0 == begin { print begin; print body; print end; skip=1; next }
+      $0 == end && skip { skip=0; next }
+      !skip { print }
+    ' "$file" >"$tmp"
+    mv "$tmp" "$file"
+    note "updated block in $file"
+    return 0
+  fi
+
+  if is_check; then
+    warn "missing block in $file"
+    drift=1
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$file")"
+  touch "$file"
+  printf '\n%s\n%s\n%s\n' "$begin" "$body" "$end" >>"$file"
+  note "added block to $file"
+}
+
+# Merge the sessionizer menu row into the user Omarchy menu extension.
+upsert_menu() {
+  local file="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+  if is_check; then
+    if [[ -f $file ]] && grep -q '"sessionizer"' "$file"; then
+      note "ok  menu row in $file"
+    else
+      warn "missing sessionizer menu row in $file"
+      drift=1
+    fi
+    return 0
+  fi
+  mkdir -p "$(dirname "$file")"
+  if [[ ! -f $file ]]; then
+    cp "$ROOT/share/omarchy-menu.jsonc" "$file"
+    note "wrote $file"
+    return 0
+  fi
+  if grep -q '"sessionizer"' "$file"; then
+    note "ok  menu row in $file"
+    return 0
+  fi
+  python3 - "$file" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+row = '''  "sessionizer": {
+    "icon": "",
+    "label": "Sessionizer",
+    "action": "omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer",
+    "aliases": ["tmux", "projects", "work"],
+    "description": "Pick a ~/Work project and attach a tmux session"
+  }'''
+idx = text.rfind("}")
+if idx < 0:
+    raise SystemExit(f"install: {path} has no closing brace")
+head = text[:idx].rstrip()
+# Insert a comma after the last property if the object is not empty.
+stripped = "".join(line for line in head.splitlines() if not line.lstrip().startswith("//")).rstrip()
+if stripped.endswith("{") or stripped.endswith(","):
+    insert = "\n" + row + "\n"
+else:
+    insert = ",\n" + row + "\n"
+path.write_text(head + insert + text[idx:])
+PY
+  note "added sessionizer menu row to $file"
+}
+
+write_hook() {
+  local dest="$HOME/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook"
+  local -a legacy=(
+    "$HOME/.config/omarchy/hooks/post-update.d/sessionizer.hook"
+    "$HOME/.config/omarchy/hooks/post-update.d/omarchy-tune.hook"
+  )
+  local hook body
+  body=$(printf '%s\n' \
+    '#!/bin/bash' \
+    '# Re-apply omarchy-tuner wiring and keybinds after omarchy update / refresh.' \
+    "exec $(printf '%q' "$ROOT/install")")
+
+  if is_check; then
+    for hook in "${legacy[@]}"; do
+      if [[ -e $hook ]]; then
+        warn "legacy hook $hook"
+        drift=1
+      fi
+    done
+    if [[ -x $dest ]] && grep -qF "$ROOT/install" "$dest"; then
+      note "ok  hook $dest"
+    else
+      warn "missing or stale hook $dest"
+      drift=1
+    fi
+    return 0
+  fi
+
+  for hook in "${legacy[@]}"; do
+    if [[ -e $hook ]]; then
+      rm -f "$hook"
+      note "removed legacy hook $hook"
+    fi
+  done
+  mkdir -p "$(dirname "$dest")"
+  printf '%s\n' "$body" >"$dest"
+  chmod 755 "$dest"
+  note "wrote $dest"
+}
+
+chmod +x "$SZ/bin/sessionizer" "$SZ/bin/sessionizer-harness" "$ROOT/install" "$ROOT/tests/run" "$SZ/tests/run"
+
+remove_block "$HOME/.bashrc" "$old_mark_begin" "$old_mark_end"
+remove_block "$HOME/.config/tmux/tmux.conf" "$old_mark_begin" "$old_mark_end"
+remove_block "$HOME/.config/hypr/bindings.lua" "$old_lua_begin" "$old_lua_end"
+remove_block "$HOME/.bashrc" "$prev_mark_begin" "$prev_mark_end"
+remove_block "$HOME/.config/tmux/tmux.conf" "$prev_mark_begin" "$prev_mark_end"
+remove_block "$HOME/.config/herdr/config.toml" "$prev_mark_begin" "$prev_mark_end"
+remove_block "$HOME/.config/hypr/bindings.lua" "$prev_lua_begin" "$prev_lua_end"
+
+ensure_symlink "$SZ/bin/sessionizer" "$HOME/.local/bin/sessionizer"
+ensure_symlink "$SZ/bin/sessionizer-harness" "$HOME/.local/bin/sessionizer-harness"
+ensure_symlink "$SZ/share/sessionizer.lua" "$HOME/.config/nvim/lua/plugins/sessionizer.lua"
+
+upsert_block "$HOME/.bashrc" "$mark_begin" "$mark_end" \
+  "source $(printf '%q' "$SZ/share/bashrc")"
+
+tmux_block=$(printf 'source-file %s\nsource-file %s' \
+  "$(printf '%q' "$SZ/share/tmux.conf")" \
+  "$(printf '%q' "$ROOT/share/tmux.binds.conf")")
+upsert_block "$HOME/.config/tmux/tmux.conf" "$mark_begin" "$mark_end" "$tmux_block"
+
+# Hyprland bindings.lua uses Lua comments.
+bindings_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/bindings.lua")"
+upsert_block "$HOME/.config/hypr/bindings.lua" "$lua_begin" "$lua_end" "$bindings_body"
+
+upsert_menu
+write_hook
+
+# Herdr C-f / prefix+f popup. Only touch the file if herdr is present.
+if command -v herdr >/dev/null 2>&1 || [[ -f $HOME/.config/herdr/config.toml ]]; then
+  upsert_block "$HOME/.config/herdr/config.toml" "$mark_begin" "$mark_end" \
+    "$(cat "$SZ/share/herdr.toml")"
+fi
+
+if is_check; then
+  if [[ $drift -eq 0 ]]; then
+    note "install --check: clean"
+    exit 0
+  fi
+  note "install --check: drift"
+  exit 1
+fi
+
+if command -v tmux >/dev/null 2>&1 && tmux list-sessions >/dev/null 2>&1; then
+  tmux source-file "$HOME/.config/tmux/tmux.conf" 2>/dev/null || true
+fi
+
+if command -v hyprctl >/dev/null 2>&1; then
+  hyprctl reload >/dev/null
+  errors="$(hyprctl configerrors 2>/dev/null || true)"
+  if [[ -n $errors && $errors != "no errors" ]]; then
+    warn "hyprctl configerrors:"
+    printf '%s\n' "$errors" >&2
+    exit 1
+  fi
+  note "hyprland reloaded (no config errors)"
+fi
+
+if command -v herdr >/dev/null 2>&1; then
+  herdr server reload-config >/dev/null 2>&1 || true
+fi
+
+note "omarchy-tuner installed. Ctrl+F in bash/nvim, Super+Alt+Return from the desktop."

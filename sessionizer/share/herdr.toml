@@ -1,0 +1,15 @@
+[[keys.command]]
+key = "ctrl+f"
+type = "popup"
+command = "sessionizer"
+width = "80%"
+height = "70%"
+description = "sessionizer"
+
+[[keys.command]]
+key = "prefix+f"
+type = "popup"
+command = "sessionizer"
+width = "80%"
+height = "70%"
+description = "sessionizer"

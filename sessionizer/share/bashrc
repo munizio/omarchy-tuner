@@ -1,0 +1,5 @@
+# Ctrl+F → sessionizer. Insert-and-run so fzf gets a real TTY (bind -x does not).
+# Inside tmux, tmux's root C-f bind usually wins first.
+if [[ $- == *i* ]]; then
+  bind '"\C-f": "\C-usessionizer\n"'
+fi

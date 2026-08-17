@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Right-pane harness selector. Loops so quitting an agent returns to the list.
+# Roster: grok, pi, omp, shell. Launch flags match omarchy-agent --inline.
+set -euo pipefail
+
+# Resolve the install symlink before taking .. — lib lives next to this file,
+# not next to ~/.local/bin/sessionizer-harness. Linux: readlink -f. Darwin: walk.
+_sessionizer_this="${BASH_SOURCE[0]}"
+if [[ $(uname -s) == Darwin ]]; then
+  [[ $_sessionizer_this == /* ]] || _sessionizer_this="$(pwd)/$_sessionizer_this"
+  while [[ -L $_sessionizer_this ]]; do
+    _sessionizer_dir="$(cd "$(dirname "$_sessionizer_this")" && pwd)"
+    _sessionizer_this="$(readlink "$_sessionizer_this")"
+    [[ $_sessionizer_this == /* ]] || _sessionizer_this="$_sessionizer_dir/$_sessionizer_this"
+  done
+  _sessionizer_this="$(cd "$(dirname "$_sessionizer_this")" && pwd)/$(basename "$_sessionizer_this")"
+else
+  _sessionizer_this="$(readlink -f "$_sessionizer_this")"
+fi
+SESSIONIZER_ROOT="$(cd "$(dirname "$_sessionizer_this")/.." && pwd)"
+unset _sessionizer_this _sessionizer_dir
+# shellcheck disable=SC1091
+source "$SESSIONIZER_ROOT/lib/sessionizer.bash"
+
+usage() {
+  cat <<'EOF'
+Usage: sessionizer-harness [OPTIONS]
+
+  Interactive fzf list: grok, pi, omp, then shell (installed only).
+  Quitting an agent returns to this list. "shell" replaces this pane.
+
+Options:
+  -h, --help  Show this help
+  --list      Print harness rows and exit
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  --list)
+    sessionizer_load_config
+    sessionizer_list_harnesses
+    exit 0
+    ;;
+  *)
+    echo "sessionizer-harness: unknown option: $1" >&2
+    usage >&2
+    exit 1
+    ;;
+  esac
+  shift
+done
+
+sessionizer_load_config
+
+command -v fzf >/dev/null 2>&1 || {
+  echo "sessionizer-harness: fzf is not installed" >&2
+  exit 1
+}
+
+pick() {
+  sessionizer_list_harnesses | fzf --prompt='harness> ' --height=100% --reverse --info=inline
+}
+
+run_choice() {
+  local choice="$1"
+  local -a argv
+  choice="${choice%% \*}"
+  choice="${choice%%\*}"
+  choice="${choice%"${choice##*[![:space:]]}"}"
+  [[ -n $choice ]] || return 0
+
+  mapfile -t argv < <(sessionizer_agent_argv "$choice")
+  if [[ $choice == shell ]]; then
+    exec "${argv[@]}"
+  fi
+  "${argv[@]}"
+}
+
+while true; do
+  if ! choice="$(pick)"; then
+    continue
+  fi
+  run_choice "$choice"
+done

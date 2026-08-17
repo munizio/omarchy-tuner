@@ -1,0 +1,9 @@
+{
+  "sessionizer": {
+    "icon": "",
+    "label": "Sessionizer",
+    "action": "omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer",
+    "aliases": ["tmux", "projects", "work"],
+    "description": "Pick a ~/Work project and attach a tmux session"
+  }
+}

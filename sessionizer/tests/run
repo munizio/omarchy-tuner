@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+# Self-contained tests. No bats required.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/lib/sessionizer.bash"
+
+fail=0
+pass=0
+
+assert_eq() {
+  local name="$1" got="$2" want="$3"
+  if [[ $got == "$want" ]]; then
+    printf 'ok  %s\n' "$name"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL %s\n  got:  %q\n  want: %q\n' "$name" "$got" "$want"
+    fail=$((fail + 1))
+  fi
+}
+
+assert_ok() {
+  local name="$1"
+  shift
+  if eval "$1"; then
+    printf 'ok  %s\n' "$name"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL %s\n' "$name"
+    fail=$((fail + 1))
+  fi
+}
+
+WORKDIR="$(mktemp -d)"
+HERDR_TEST_SESSION=""
+cleanup() {
+  if [[ -n $HERDR_TEST_SESSION ]]; then
+    herdr session stop "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
+    herdr session delete "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$WORKDIR"
+}
+trap cleanup EXIT
+
+# --- naming ---
+assert_eq "name strips path" "$(sessionizer_name /tmp/oh-my-pi)" "oh-my-pi"
+assert_eq "name dots to underscores" "$(sessionizer_name /tmp/foo.bar)" "foo_bar"
+assert_eq "name colons to underscores" "$(sessionizer_name /tmp/foo:bar)" "foo_bar"
+assert_eq "name trailing slash" "$(sessionizer_name /tmp/proj/)" "proj"
+assert_eq "name strips leading dot" "$(sessionizer_name /tmp/.config)" "config"
+
+# --- directory listing, depth 1, hidden skipped ---
+mkdir -p "$WORKDIR/Work/oh-my-pi" "$WORKDIR/Work/sessionizer" "$WORKDIR/Work/tries/nested" "$WORKDIR/Work/.hidden" "$WORKDIR/.config/sessionizer"
+SESSIONIZER_ROOTS=("$WORKDIR/Work")
+SESSIONIZER_DEPTH=1
+mapfile -t dirs < <(sessionizer_list_dirs)
+joined="$(printf '%s\n' "${dirs[@]}")"
+assert_ok "lists oh-my-pi" 'grep -qx "$WORKDIR/Work/oh-my-pi" <<<"$joined"'
+assert_ok "lists sessionizer" 'grep -qx "$WORKDIR/Work/sessionizer" <<<"$joined"'
+assert_ok "lists tries as one row" 'grep -qx "$WORKDIR/Work/tries" <<<"$joined"'
+assert_ok "does not recurse into tries" '! grep -q "$WORKDIR/Work/tries/nested" <<<"$joined"'
+assert_ok "skips hidden dirs" '! grep -q "$WORKDIR/Work/.hidden" <<<"$joined"'
+assert_ok "omits extras when unset" '! grep -q "$WORKDIR/.config" <<<"$joined"'
+
+# --- extras are listed as themselves, including hidden names ---
+mkdir -p "$WORKDIR/dotfiles"
+SESSIONIZER_EXTRAS=("$WORKDIR/.config" "$WORKDIR/missing" "$WORKDIR/dotfiles")
+mapfile -t dirs < <(sessionizer_list_dirs)
+joined="$(printf '%s\n' "${dirs[@]}")"
+assert_ok "lists extra .config" 'grep -qx "$WORKDIR/.config" <<<"$joined"'
+assert_ok "lists extra dotfiles" 'grep -qx "$WORKDIR/dotfiles" <<<"$joined"'
+assert_ok "skips missing extra" '! grep -q "$WORKDIR/missing" <<<"$joined"'
+assert_ok "does not list .config children" '! grep -q "$WORKDIR/.config/sessionizer" <<<"$joined"'
+unset SESSIONIZER_EXTRAS
+
+# --- harness roster ---
+fakes="$WORKDIR/bin"
+mkdir -p "$fakes"
+ln -s /usr/bin/true "$fakes/grok"
+ln -s /usr/bin/true "$fakes/opencode"
+ln -s /usr/bin/true "$fakes/pi"
+ln -s /usr/bin/true "$fakes/omp"
+# claude is not in the roster and not on PATH
+PATH="$fakes:/usr/bin:/bin"
+
+mapfile -t harnesses < <(sessionizer_list_harnesses)
+assert_eq "harness order" "$(printf '%s\n' "${harnesses[@]}")" $'grok\npi\nomp\nshell'
+assert_ok "omits agents not in roster" '! printf "%s\n" "${harnesses[@]}" | grep -qx opencode'
+assert_ok "omits missing claude" '! printf "%s\n" "${harnesses[@]}" | grep -qx claude'
+
+# Missing omp is skipped; shell stays last.
+rm -f "$fakes/omp"
+mapfile -t harnesses < <(sessionizer_list_harnesses)
+assert_eq "harness order without omp" "$(printf '%s\n' "${harnesses[@]}")" $'grok\npi\nshell'
+ln -s /usr/bin/true "$fakes/omp"
+
+# --- agent argv matches omarchy-agent ---
+assert_eq "grok flags" "$(sessionizer_agent_argv grok | paste -sd' ' -)" "grok --permission-mode bypassPermissions"
+assert_eq "codex flags" "$(sessionizer_agent_argv codex | paste -sd' ' -)" "codex --dangerously-bypass-approvals-and-sandbox"
+assert_eq "opencode flags" "$(sessionizer_agent_argv opencode | paste -sd' ' -)" "opencode --auto"
+assert_eq "omp flags" "$(sessionizer_agent_argv omp | paste -sd' ' -)" "omp --auto-approve"
+assert_eq "pi flags" "$(sessionizer_agent_argv pi | paste -sd' ' -)" "pi"
+assert_eq "shell argv" "$(sessionizer_agent_argv shell)" "${SHELL:-bash}"
+
+# --- backend selection ---
+unset HERDR_ENV TMUX
+SESSIONIZER_BACKEND=auto
+assert_eq "auto outside is tmux" "$(sessionizer_backend)" "tmux"
+HERDR_ENV=1
+assert_eq "auto inside herdr is herdr" "$(sessionizer_backend)" "herdr"
+SESSIONIZER_BACKEND=herdr
+unset HERDR_ENV
+assert_eq "explicit herdr" "$(sessionizer_backend)" "herdr"
+SESSIONIZER_BACKEND=tmux
+HERDR_ENV=1
+assert_eq "explicit tmux wins" "$(sessionizer_backend)" "tmux"
+unset HERDR_ENV SESSIONIZER_BACKEND
+
+# --- fzf display: herdr never uses --tmux ---
+unset TMUX HERDR_ENV
+assert_eq "fzf outside is fullscreen" "$(sessionizer_fzf_display_args)" "--height=100%"
+TMUX=1
+assert_eq "fzf inside tmux is popup" "$(sessionizer_fzf_display_args)" "--tmux=center,80%,70%"
+HERDR_ENV=1
+assert_eq "fzf inside herdr is inline" "$(sessionizer_fzf_display_args)" "--height=100%"
+unset TMUX HERDR_ENV
+
+# --- CLI --name / --list ---
+assert_eq "cli --name" "$("$ROOT/bin/sessionizer" --name "$WORKDIR/Work/foo.bar")" "foo_bar"
+assert_eq "cli --name .config" "$("$ROOT/bin/sessionizer" --name "$WORKDIR/.config")" "config"
+
+export HOME="$WORKDIR"
+export SESSIONIZER_TMUX_SOCKET="sessionizer-test-$$"
+unset TMUX
+mkdir -p "$WORKDIR/.config/sessionizer"
+cat >"$WORKDIR/.config/sessionizer/config" <<EOF
+SESSIONIZER_ROOTS=("$WORKDIR/Work")
+SESSIONIZER_DEPTH=1
+EOF
+tmux -L "$SESSIONIZER_TMUX_SOCKET" kill-server >/dev/null 2>&1 || true
+
+list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
+assert_ok "cli --list has sessionizer" 'grep -q "sessionizer	" <<<"$list"'
+assert_ok "cli --list has oh-my-pi" 'grep -q "oh-my-pi	" <<<"$list"'
+assert_ok "cli --list has tries" 'grep -q "tries	" <<<"$list"'
+assert_ok "cli --list has .config extra" 'grep -q "^\.config	" <<<"$list"'
+assert_ok "cli --list .config is HOME/.config" 'grep -qx "\.config	$WORKDIR/.config" <<<"$list"'
+assert_ok "cli --list no nested" '! grep -q nested <<<"$list"'
+
+# --- session create (detached, private tmux server) ---
+PATH="$ROOT/bin:$fakes:/usr/bin:/bin"
+"$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true
+# attach will fail with no terminal; the session should still have been created
+if tmux -L "$SESSIONIZER_TMUX_SOCKET" has-session -t '=sessionizer' 2>/dev/null; then
+  windows="$(tmux -L "$SESSIONIZER_TMUX_SOCKET" list-windows -t sessionizer -F '#{window_name}:#{window_panes}')"
+  assert_ok "created nvim window" 'grep -q "^nvim:1$" <<<"$windows"'
+  assert_ok "created scratch window with 2 panes" 'grep -q "^scratch:2$" <<<"$windows"'
+  panes="$(tmux -L "$SESSIONIZER_TMUX_SOCKET" list-panes -t sessionizer:scratch -F '#{pane_start_command}')"
+  assert_ok "right pane is harness" 'grep -q sessionizer-harness <<<"$panes"'
+else
+  printf 'FAIL created detached session\n'
+  fail=$((fail + 1))
+fi
+tmux -L "$SESSIONIZER_TMUX_SOCKET" kill-server >/dev/null 2>&1 || true
+
+# Invoking through a ~/.local/bin-style symlink must still find lib/.
+linkdir="$WORKDIR/bindir"
+mkdir -p "$linkdir"
+ln -s "$ROOT/bin/sessionizer" "$linkdir/sessionizer"
+ln -s "$ROOT/bin/sessionizer-harness" "$linkdir/sessionizer-harness"
+assert_ok "symlink invocation finds lib" '"$linkdir/sessionizer" --help >/dev/null'
+assert_ok "harness symlink finds lib" '"$linkdir/sessionizer-harness" --help >/dev/null'
+
+# --- realpath: Linux readlink -f, Darwin walk ---
+target="$WORKDIR/realpath-target"
+ln -s "$ROOT/bin/sessionizer" "$target"
+hop="$WORKDIR/realpath-hop"
+ln -s "$target" "$hop"
+assert_eq "realpath follows symlink" "$(sessionizer_realpath "$target")" "$(readlink -f "$target")"
+assert_eq "walk follows two hops" "$(sessionizer_realpath_walk "$hop")" "$(readlink -f "$hop")"
+assert_eq "realpath of this lib" "$(sessionizer_realpath "$ROOT/lib/sessionizer.bash")" "$(readlink -f "$ROOT/lib/sessionizer.bash")"
+
+# --- herdr backend (optional; skip if herdr is not installed) ---
+if ! command -v herdr >/dev/null 2>&1; then
+  printf 'ok  herdr skipped (not installed)\n'
+  pass=$((pass + 1))
+else
+  HERDR_TEST_SESSION="sessionizer-test-$$"
+  export SESSIONIZER_HERDR_SESSION="$HERDR_TEST_SESSION"
+  export SESSIONIZER_BACKEND=herdr
+  cat >"$WORKDIR/.config/sessionizer/config" <<EOF
+SESSIONIZER_ROOTS=("$WORKDIR/Work")
+SESSIONIZER_DEPTH=1
+SESSIONIZER_BACKEND=herdr
+SESSIONIZER_HERDR_SESSION="$HERDR_TEST_SESSION"
+EOF
+
+  list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
+  assert_ok "herdr --list dirs without server" 'grep -q "sessionizer	" <<<"$list"'
+  assert_ok "herdr --list no herdr rows without server" '! grep -q "^\[herdr\]" <<<"$list"'
+
+  herdr --session "$HERDR_TEST_SESSION" server >/dev/null 2>&1 &
+  ready=0
+  for _ in $(seq 1 50); do
+    if sessionizer_herdr_running; then
+      ready=1
+      break
+    fi
+    sleep 0.1
+  done
+  if [[ $ready -ne 1 ]]; then
+    printf 'FAIL herdr server start\n'
+    fail=$((fail + 1))
+  else
+    assert_ok "herdr server started" 'true'
+    "$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true
+    if wid="$(sessionizer_herdr_workspace_id sessionizer)"; then
+      assert_ok "created herdr workspace" 'true'
+      tab_labels="$(herdr --session "$HERDR_TEST_SESSION" tab list --workspace "$wid" | python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+print(" ".join(t.get("label","") for t in data.get("result",{}).get("tabs",[])))
+')"
+      assert_ok "herdr nvim tab" '[[ $tab_labels == *nvim* ]]'
+      assert_ok "herdr scratch tab" '[[ $tab_labels == *scratch* ]]'
+      scratch_count="$(herdr --session "$HERDR_TEST_SESSION" pane list --workspace "$wid" | python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+tabs={}
+labels={}
+# tab list is not in this payload; count panes per tab_id
+for p in data.get("result",{}).get("panes",[]):
+    tabs[p["tab_id"]] = tabs.get(p["tab_id"], 0) + 1
+print(max(tabs.values()) if tabs else 0)
+')"
+      assert_ok "herdr scratch has 2 panes" '[[ $scratch_count -ge 2 ]]'
+      # pane run types argv into the shell; a leading -- becomes "command not found".
+      sleep 0.3
+      pane_text=""
+      while IFS= read -r pid; do
+        pane_text+="$(herdr --session "$HERDR_TEST_SESSION" pane read "$pid" --source recent-unwrapped --lines 30)"
+        pane_text+=$'\n'
+      done < <(herdr --session "$HERDR_TEST_SESSION" pane list --workspace "$wid" | python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+for p in data.get("result",{}).get("panes",[]):
+    print(p["pane_id"])
+')
+      assert_ok "herdr panes do not run leading --" '! grep -q "command not found: --" <<<"$pane_text"'
+      assert_ok "herdr did not type -- as the command" '! grep -qE "(^|[\"[:space:]])-- (nvim|/.*/sessionizer-harness)" <<<"$pane_text"'
+      list="$("$ROOT/bin/sessionizer" --list)"
+      assert_ok "herdr --list tags workspace" 'grep -q "^\[herdr\] sessionizer	workspace:" <<<"$list"'
+      list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
+      assert_ok "herdr --no-sessions hides workspace" '! grep -q "^\[herdr\]" <<<"$list"'
+      # Re-invoke must not create a second workspace with the same label.
+      "$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true
+      ws_n="$(herdr --session "$HERDR_TEST_SESSION" workspace list | python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+print(sum(1 for w in data["result"]["workspaces"] if w.get("label")=="sessionizer"))
+')"
+      assert_eq "herdr does not rebuild existing workspace" "$ws_n" "1"
+    else
+      printf 'FAIL created herdr workspace\n'
+      fail=$((fail + 1))
+    fi
+  fi
+  unset SESSIONIZER_BACKEND SESSIONIZER_HERDR_SESSION
+fi
+
+printf '\n%d passed, %d failed\n' "$pass" "$fail"
+exit $((fail > 0))
