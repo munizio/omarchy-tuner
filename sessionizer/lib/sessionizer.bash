@@ -27,7 +27,7 @@ sessionizer_realpath() {
 
 # Harness selector roster, in display order. Launch flags still match
 # omarchy-agent --inline. shell is always last and always listed.
-SESSIONIZER_AGENTS=(grok pi omp claude)
+SESSIONIZER_AGENTS=(grok pi omp opencode claude)
 
 sessionizer_load_config() {
   local config="${XDG_CONFIG_HOME:-$HOME/.config}/sessionizer/config"

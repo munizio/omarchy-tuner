@@ -51,6 +51,54 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook` are removed.
 
 Nothing under `/usr/share/omarchy/` is touched.
 
+## Install (macOS)
+
+Do not run `./install`. That script is Omarchy-only.
+
+```bash
+# tmux ≥ 3.3, fzf ≥ 0.53
+brew install tmux fzf
+mkdir -p ~/.local/bin
+ln -sfn ~/Work/omarchy-tuner/sessionizer/bin/sessionizer ~/.local/bin/sessionizer
+ln -sfn ~/Work/omarchy-tuner/sessionizer/bin/sessionizer-harness ~/.local/bin/sessionizer-harness
+```
+
+Put `~/.local/bin` on `PATH`. Keep those command names; the symlink must point at the clone so `lib/` resolves.
+
+### tmux
+
+In `~/.config/tmux/tmux.conf` (or `~/.tmux.conf`):
+
+```tmux
+source-file ~/Work/omarchy-tuner/sessionizer/share/tmux.conf
+source-file ~/Work/omarchy-tuner/share/tmux.binds.conf
+```
+
+The first file is Ctrl+F and prefix+`f` → sessionizer. Do not wrap that in `display-popup`. The second is prefix `C-a`, `|/‑` splits, hjkl panes, `X` kill-window — skip it if you only want the picker.
+
+```bash
+tmux source-file ~/.config/tmux/tmux.conf
+```
+
+### herdr
+
+Append `sessionizer/share/herdr.toml` to `~/.config/herdr/config.toml`, then `herdr server reload-config`.
+
+`auto` backend: herdr only when already inside herdr; otherwise tmux.
+
+### Optional (outside tmux / herdr)
+
+```zsh
+# ~/.zshrc
+bindkey -s '^F' '^Usessionizer\n'
+```
+
+```bash
+ln -sfn ~/Work/omarchy-tuner/sessionizer/share/sessionizer.lua ~/.config/nvim/lua/plugins/sessionizer.lua
+```
+
+No Super+Alt+Return equivalent. Existing sessions are not rebuilt.
+
 ## Usage
 
 ```
