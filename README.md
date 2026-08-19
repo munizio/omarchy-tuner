@@ -36,8 +36,10 @@ Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 
 - `~/.bashrc` — Ctrl+F
 - `~/.config/tmux/tmux.conf` — prefix+f popup; prefix+|/- splits, hjkl panes, X kill-window
-- `~/.config/herdr/config.toml` — Ctrl+F and prefix+f popup (only if herdr is present)
+- `~/.config/herdr/config.toml` — Ctrl+F and prefix+f popup; prefix `ctrl+a`; prefix+j / prefix+k workspace next/prev (only if herdr is present)
+- `~/.grok/config.toml` — `[ui] screen_mode = "minimal"` (only if grok is present)
 - `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces
+- `~/.config/hypr/input.lua` — mouse and touchpad natural scrolling
 - `~/.config/omarchy/extensions/omarchy-menu.jsonc` — Sessionizer menu row
 
 And it adds:

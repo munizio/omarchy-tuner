@@ -142,6 +142,283 @@ upsert_block() {
   note "added block to $file"
 }
 
+# Set table.key = "value" in a TOML file without rewriting the rest.
+# Matches only the named table header ([keys], not [keys.foo] or [[keys]]).
+ensure_toml_string() {
+  local file="$1" table="$2" key="$3" value="$4"
+  local result
+  result="$(
+    CHECK="$CHECK" python3 - "$file" "$table" "$key" "$value" <<'PY'
+import os, pathlib, re, sys
+
+path = pathlib.Path(sys.argv[1])
+table, key, value = sys.argv[2], sys.argv[3], sys.argv[4]
+check = os.environ.get("CHECK") == "1"
+wanted = f'{key} = "{value}"'
+table_re = re.compile(rf"^\[{re.escape(table)}\]\s*(#.*)?$")
+other_re = re.compile(r"^\[")
+key_re = re.compile(rf"^(\s*){re.escape(key)}\s*=\s*(\"[^\"]*\"|'[^']*'|[^#\s]+)(.*)$")
+
+if path.is_file():
+    text = path.read_text()
+    newline = "\n" if "\r\n" not in text else "\r\n"
+    lines = text.splitlines()
+else:
+    newline = "\n"
+    lines = []
+
+in_table = False
+found_table = False
+found_key = False
+action = "ok"
+out = []
+
+def current_value(raw: str) -> str:
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+        return raw[1:-1]
+    return raw
+
+def insert_key() -> None:
+    global found_key, action
+    out.append(wanted)
+    found_key = True
+    action = "added"
+
+for line in lines:
+    if table_re.match(line):
+        in_table = True
+        found_table = True
+        out.append(line)
+        continue
+    if in_table and other_re.match(line):
+        if not found_key:
+            blanks = []
+            while out and out[-1] == "":
+                blanks.append(out.pop())
+            insert_key()
+            out.extend(reversed(blanks))
+        in_table = False
+    m = key_re.match(line) if in_table else None
+    if m:
+        found_key = True
+        if current_value(m.group(2)) == value:
+            out.append(line)
+        else:
+            out.append(f"{m.group(1)}{wanted}{m.group(3)}")
+            action = "updated"
+        continue
+    out.append(line)
+
+if found_table and not found_key:
+    insert_key()
+
+if not found_table:
+    if out and out[-1] != "":
+        out.append("")
+    out.append(f"[{table}]")
+    insert_key()
+
+if action == "ok":
+    print("ok")
+    raise SystemExit(0)
+
+if check:
+    print("missing" if action == "added" else "stale")
+    raise SystemExit(0)
+
+path.parent.mkdir(parents=True, exist_ok=True)
+body = newline.join(out)
+if not body.endswith(newline):
+    body += newline
+path.write_text(body)
+print(action)
+PY
+  )"
+  case "$result" in
+  ok)
+    if is_check; then
+      note "ok  $table.$key in $file"
+    fi
+    ;;
+  missing | stale)
+    warn "$result $table.$key in $file"
+    drift=1
+    ;;
+  added)
+    note "set $table.$key in $file"
+    ;;
+  updated)
+    note "updated $table.$key in $file"
+    ;;
+  *)
+    warn "failed to set $table.$key in $file"
+    drift=1
+    ;;
+  esac
+}
+
+# Herdr workspace next/prev on prefix+j / prefix+k. Drop those chords
+# from every other [keys] action. Omarchy's close_tab is prefix+k;
+# after unbinding it, restore herdr's prefix+shift+x (same as tmux prefix+X).
+ensure_herdr_nav() {
+  local file="$1"
+  local result
+  result="$(
+    CHECK="$CHECK" python3 - "$file" <<'PY'
+import os, pathlib, re, sys, tomllib
+
+path = pathlib.Path(sys.argv[1])
+check = os.environ.get("CHECK") == "1"
+
+wanted = {
+    "next_workspace": ["prefix+j", "alt+down"],
+    "previous_workspace": ["prefix+k", "alt+up"],
+}
+chords = {"prefix+j", "prefix+k"}
+keep = set(wanted)
+close_tab_fallback = "prefix+shift+x"
+
+table_re = re.compile(r"^\[keys\]\s*(#.*)?$")
+other_re = re.compile(r"^\[")
+assign_re = re.compile(r"^(\s*)([A-Za-z0-9_]+)\s*=\s*(.*)$")
+
+
+def parse_rhs(rhs: str):
+    try:
+        return tomllib.loads("v = " + rhs)["v"]
+    except tomllib.TOMLDecodeError:
+        return object()
+
+
+def dump_rhs(val) -> str:
+    if isinstance(val, str):
+        return f'"{val}"'
+    if isinstance(val, list):
+        inner = ", ".join(f'"{x}"' for x in val)
+        return f"[{inner}]"
+    raise TypeError(val)
+
+
+def drop_chords(val):
+    if isinstance(val, str):
+        return "" if val in chords else val
+    if isinstance(val, list):
+        kept = [x for x in val if x not in chords]
+        if not kept:
+            return ""
+        if len(kept) == 1:
+            return kept[0]
+        return kept
+    return val
+
+
+if path.is_file():
+    text = path.read_text()
+    newline = "\n" if "\r\n" not in text else "\r\n"
+    lines = text.splitlines()
+else:
+    newline = "\n"
+    lines = []
+
+in_table = False
+found_table = False
+seen = set()
+action = "ok"
+out = []
+
+
+def insert_wanted() -> None:
+    global action
+    for key, val in wanted.items():
+        if key not in seen:
+            out.append(f"{key} = {dump_rhs(val)}")
+            seen.add(key)
+            if action == "ok":
+                action = "added"
+
+
+for line in lines:
+    if table_re.match(line):
+        in_table = True
+        found_table = True
+        out.append(line)
+        continue
+    if in_table and other_re.match(line):
+        blanks = []
+        while out and out[-1] == "":
+            blanks.append(out.pop())
+        insert_wanted()
+        out.extend(reversed(blanks))
+        in_table = False
+    m = assign_re.match(line) if in_table else None
+    if m:
+        indent, key, rhs = m.group(1), m.group(2), m.group(3)
+        val = parse_rhs(rhs)
+        if key in wanted:
+            seen.add(key)
+            if val == wanted[key]:
+                out.append(line)
+            else:
+                out.append(f"{indent}{key} = {dump_rhs(wanted[key])}")
+                action = "updated"
+            continue
+        new = drop_chords(val)
+        if new != val:
+            if key == "close_tab" and new == "":
+                new = close_tab_fallback
+            out.append(f"{indent}{key} = {dump_rhs(new)}")
+            action = "updated"
+            continue
+    out.append(line)
+
+if found_table:
+    insert_wanted()
+else:
+    if out and out[-1] != "":
+        out.append("")
+    out.append("[keys]")
+    insert_wanted()
+
+if action == "ok":
+    print("ok")
+    raise SystemExit(0)
+
+if check:
+    print("missing" if action == "added" else "stale")
+    raise SystemExit(0)
+
+path.parent.mkdir(parents=True, exist_ok=True)
+body = newline.join(out)
+if not body.endswith(newline):
+    body += newline
+path.write_text(body)
+print(action)
+PY
+  )"
+  case "$result" in
+  ok)
+    if is_check; then
+      note "ok  herdr workspace nav in $file"
+    fi
+    ;;
+  missing | stale)
+    warn "$result herdr workspace nav in $file"
+    drift=1
+    ;;
+  added)
+    note "set herdr workspace nav in $file"
+    ;;
+  updated)
+    note "updated herdr workspace nav in $file"
+    ;;
+  *)
+    warn "failed to set herdr workspace nav in $file"
+    drift=1
+    ;;
+  esac
+}
+
 # Merge the sessionizer menu row into the user Omarchy menu extension.
 upsert_menu() {
   local file="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
@@ -235,10 +512,12 @@ chmod +x "$SZ/bin/sessionizer" "$SZ/bin/sessionizer-harness" "$ROOT/install" "$R
 remove_block "$HOME/.bashrc" "$old_mark_begin" "$old_mark_end"
 remove_block "$HOME/.config/tmux/tmux.conf" "$old_mark_begin" "$old_mark_end"
 remove_block "$HOME/.config/hypr/bindings.lua" "$old_lua_begin" "$old_lua_end"
+remove_block "$HOME/.config/hypr/input.lua" "$old_lua_begin" "$old_lua_end"
 remove_block "$HOME/.bashrc" "$prev_mark_begin" "$prev_mark_end"
 remove_block "$HOME/.config/tmux/tmux.conf" "$prev_mark_begin" "$prev_mark_end"
 remove_block "$HOME/.config/herdr/config.toml" "$prev_mark_begin" "$prev_mark_end"
 remove_block "$HOME/.config/hypr/bindings.lua" "$prev_lua_begin" "$prev_lua_end"
+remove_block "$HOME/.config/hypr/input.lua" "$prev_lua_begin" "$prev_lua_end"
 
 ensure_symlink "$SZ/bin/sessionizer" "$HOME/.local/bin/sessionizer"
 ensure_symlink "$SZ/bin/sessionizer-harness" "$HOME/.local/bin/sessionizer-harness"
@@ -252,17 +531,30 @@ tmux_block=$(printf 'source-file %s\nsource-file %s' \
   "$(printf '%q' "$ROOT/share/tmux.binds.conf")")
 upsert_block "$HOME/.config/tmux/tmux.conf" "$mark_begin" "$mark_end" "$tmux_block"
 
-# Hyprland bindings.lua uses Lua comments.
+# Hyprland bindings.lua / input.lua use Lua comments.
 bindings_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/bindings.lua")"
 upsert_block "$HOME/.config/hypr/bindings.lua" "$lua_begin" "$lua_end" "$bindings_body"
+
+input_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/input.lua")"
+upsert_block "$HOME/.config/hypr/input.lua" "$lua_begin" "$lua_end" "$input_body"
 
 upsert_menu
 write_hook
 
-# Herdr C-f / prefix+f popup. Only touch the file if herdr is present.
+# Herdr C-f / prefix+f popup, C-a prefix like tmux, and prefix+j/k
+# workspace next/prev. Those [keys] fields cannot go in the marked
+# block without a second [keys] table. Only touch the file if herdr
+# is present.
 if command -v herdr >/dev/null 2>&1 || [[ -f $HOME/.config/herdr/config.toml ]]; then
   upsert_block "$HOME/.config/herdr/config.toml" "$mark_begin" "$mark_end" \
     "$(cat "$SZ/share/herdr.toml")"
+  ensure_toml_string "$HOME/.config/herdr/config.toml" keys prefix ctrl+a
+  ensure_herdr_nav "$HOME/.config/herdr/config.toml"
+fi
+
+# Grok default render mode. Only touch the file if grok is present.
+if command -v grok >/dev/null 2>&1 || [[ -f $HOME/.grok/config.toml ]]; then
+  ensure_toml_string "$HOME/.grok/config.toml" ui screen_mode minimal
 fi
 
 if is_check; then
