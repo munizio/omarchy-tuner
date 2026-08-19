@@ -34,7 +34,15 @@ assert_ok() {
 
 WORKDIR="$(mktemp -d)"
 HERDR_TEST_SESSION=""
+# Drop inherited live-session env before any herdr CLI. Running these
+# tests from a herdr pane would otherwise send `herdr --session` to the
+# user's TUI (HERDR_SOCKET_PATH) and create a workspace named sessionizer.
+detach_live_herdr() {
+  unset HERDR_ENV HERDR_SOCKET_PATH HERDR_SESSION HERDR_CLIENT_SOCKET_PATH \
+    HERDR_WORKSPACE_ID HERDR_TAB_ID HERDR_PANE_ID
+}
 cleanup() {
+  detach_live_herdr
   if [[ -n $HERDR_TEST_SESSION ]]; then
     herdr session stop "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
     herdr session delete "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
@@ -186,9 +194,12 @@ if ! command -v herdr >/dev/null 2>&1; then
   printf 'ok  herdr skipped (not installed)\n'
   pass=$((pass + 1))
 else
+  detach_live_herdr
   HERDR_TEST_SESSION="sessionizer-test-$$"
   export SESSIONIZER_HERDR_SESSION="$HERDR_TEST_SESSION"
   export SESSIONIZER_BACKEND=herdr
+  export HOME="$WORKDIR"
+  export XDG_CONFIG_HOME="$WORKDIR/.config"
   cat >"$WORKDIR/.config/sessionizer/config" <<EOF
 SESSIONIZER_ROOTS=("$WORKDIR/Work")
 SESSIONIZER_DEPTH=1
@@ -209,9 +220,34 @@ EOF
     fi
     sleep 0.1
   done
+  test_dir="$(command herdr session list --json 2>/dev/null | python3 -c '
+import json, sys
+name = sys.argv[1]
+data = json.load(sys.stdin)
+for session in data.get("sessions", []):
+    if session.get("name") == name:
+        print(session.get("session_dir") or "")
+        raise SystemExit(0)
+raise SystemExit(0)
+' "$HERDR_TEST_SESSION")"
+  default_dir="$(command herdr session list --json 2>/dev/null | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+for session in data.get("sessions", []):
+    if session.get("default") or session.get("name") == "default":
+        print(session.get("session_dir") or "")
+        raise SystemExit(0)
+raise SystemExit(0)
+')"
   if [[ $ready -ne 1 ]]; then
     printf 'FAIL herdr server start\n'
     fail=$((fail + 1))
+  elif [[ -z $test_dir || $test_dir == "$default_dir" ]]; then
+    printf 'FAIL herdr test session is not isolated\n'
+    fail=$((fail + 1))
+    herdr session stop "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
+    herdr session delete "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
+    HERDR_TEST_SESSION=""
   else
     assert_ok "herdr server started" 'true'
     "$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true

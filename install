@@ -258,38 +258,6 @@ PY
   esac
 }
 
-# Herdr workspace next/prev on prefix+j / prefix+k. Drop those chords
-# (and prefix+shift+j / prefix+shift+k) from every other [keys] action.
-# Omarchy's close_tab is prefix+k; restore herdr's prefix+shift+x
-# (same as tmux prefix+X). Omarchy's close_workspace is prefix+shift+k;
-# restore herdr's prefix+shift+d.
-ensure_herdr_nav() {
-  local file="$1"
-  local result
-  result="$(CHECK="$CHECK" python3 "$ROOT/share/ensure_herdr_nav.py" "$file")"
-  case "$result" in
-  ok)
-    if is_check; then
-      note "ok  herdr workspace nav in $file"
-    fi
-    ;;
-  missing | stale)
-    warn "$result herdr workspace nav in $file"
-    drift=1
-    ;;
-  added)
-    note "set herdr workspace nav in $file"
-    ;;
-  updated)
-    note "updated herdr workspace nav in $file"
-    ;;
-  *)
-    warn "failed to set herdr workspace nav in $file"
-    drift=1
-    ;;
-  esac
-}
-
 # Merge the sessionizer menu row into the user Omarchy menu extension.
 upsert_menu() {
   local file="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
@@ -378,7 +346,7 @@ write_hook() {
   note "wrote $dest"
 }
 
-chmod +x "$SZ/bin/sessionizer" "$SZ/bin/sessionizer-harness" "$ROOT/install" "$ROOT/tests/run" "$ROOT/tests/herdr-nav" "$SZ/tests/run"
+chmod +x "$SZ/bin/sessionizer" "$SZ/bin/sessionizer-harness" "$ROOT/install" "$ROOT/tests/run" "$SZ/tests/run"
 
 remove_block "$HOME/.bashrc" "$old_mark_begin" "$old_mark_end"
 remove_block "$HOME/.config/tmux/tmux.conf" "$old_mark_begin" "$old_mark_end"
@@ -412,15 +380,13 @@ upsert_block "$HOME/.config/hypr/input.lua" "$lua_begin" "$lua_end" "$input_body
 upsert_menu
 write_hook
 
-# Herdr C-f / prefix+f popup, C-a prefix like tmux, and prefix+j/k
-# workspace next/prev. Those [keys] fields cannot go in the marked
-# block without a second [keys] table. Only touch the file if herdr
-# is present.
+# Herdr C-f / prefix+f popup and C-a prefix like tmux. Other [keys]
+# stay Omarchy defaults. prefix cannot go in the marked block without
+# a second [keys] table. Only touch the file if herdr is present.
 if command -v herdr >/dev/null 2>&1 || [[ -f $HOME/.config/herdr/config.toml ]]; then
   upsert_block "$HOME/.config/herdr/config.toml" "$mark_begin" "$mark_end" \
     "$(cat "$SZ/share/herdr.toml")"
   ensure_toml_string "$HOME/.config/herdr/config.toml" keys prefix ctrl+a
-  ensure_herdr_nav "$HOME/.config/herdr/config.toml"
 fi
 
 # Grok default render mode. Only touch the file if grok is present.

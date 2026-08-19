@@ -1,7 +1,8 @@
 -- omarchy-tuner:begin
--- Mouse wheel and touchpad two-finger scroll. Omarchy ships both as false.
+-- Caps Lock as Ctrl (replaces Omarchy compose:caps). Mouse/touchpad natural scroll.
 hl.config({
   input = {
+    kb_options = "nocaps:ctrl",
     natural_scroll = true,
     touchpad = {
       natural_scroll = true,
