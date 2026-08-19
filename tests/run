@@ -2,4 +2,7 @@
 # Run every package test suite.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec "$ROOT/sessionizer/tests/run"
+status=0
+"$ROOT/sessionizer/tests/run" || status=1
+"$ROOT/tests/herdr-nav" || status=1
+exit "$status"

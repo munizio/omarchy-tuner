@@ -26,6 +26,7 @@ already uses it).
 | `sessionizer/share/sessionizer.lua` | nvim Ctrl+F fallback when not inside tmux or herdr |
 | `sessionizer/tests/run` | Sessionizer tests. No bats. |
 | `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+X kill-window (overrides Omarchy defaults) |
+| `share/ensure_herdr_nav.py` | Rewrites herdr `[keys]` workspace next/prev and remaps `close_tab` / `close_workspace`. Invoked by `./install`. |
 | `share/bindings.lua` | Hyprland Super+Alt+Return and Ctrl+1–0 / H / L workspaces |
 | `share/input.lua` | Hyprland mouse + touchpad `natural_scroll` |
 | `share/omarchy-menu.jsonc` | Omarchy menu row (template; installer merges) |
@@ -60,7 +61,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | --- | --- |
 | `~/.bashrc` | `source` of `sessionizer/share/bashrc` |
 | `~/.config/tmux/tmux.conf` | `source-file` of `sessionizer/share/tmux.conf` and `share/tmux.binds.conf`. `omarchy refresh tmux` overwrites this file; the post-update hook re-adds the block. |
-| `~/.config/herdr/config.toml` | `[[keys.command]]` popup binds for Ctrl+F and prefix+`f`. Sets `[keys] prefix` to `ctrl+a` (Omarchy ships `ctrl+space`). Sets next/previous workspace to prefix+`j` / prefix+`k` and removes those chords from other actions (`close_tab` becomes prefix+shift+`x`). Only written if `herdr` is on PATH or the file already exists. |
+| `~/.config/herdr/config.toml` | `[[keys.command]]` popup binds for Ctrl+F and prefix+`f`. Sets `[keys] prefix` to `ctrl+a` (Omarchy ships `ctrl+space`). Sets next/previous workspace to prefix+`j` / prefix+`k` and removes those chords (and prefix+shift+`j`/`k`) from other actions (`close_tab` becomes prefix+shift+`x`, `close_workspace` becomes prefix+shift+`d`). Only written if `herdr` is on PATH or the file already exists. |
 | `~/.grok/config.toml` | Sets `[ui] screen_mode = "minimal"`. Only written if `grok` is on PATH or the file already exists. |
 | `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
 | `~/.config/hypr/input.lua` | Mouse and touchpad `natural_scroll = true` (Omarchy ships both as false). |
@@ -193,7 +194,7 @@ the selector UI.
 | tmux | prefix+f (`C-a f`) | Same `run-shell -b sessionizer` |
 | herdr (anywhere) | Ctrl+F | `[[keys.command]]` popup. Same picker; creates/focuses a workspace. |
 | herdr | prefix+f (`C-a f`) | Same popup. |
-| herdr | prefix+j / prefix+k | Next / previous workspace. `close_tab` was prefix+`k`. |
+| herdr | prefix+j / prefix+k | Next / previous workspace. `close_tab` was prefix+`k`; `close_workspace` was prefix+shift+`k`. |
 | bash, not in tmux | Ctrl+F | Inserts `sessionizer` + newline. **Do not use `bind -x`** — fzf gets no TTY. |
 | nvim, not in tmux | `<C-f>` | `sessionizer/share/sessionizer.lua` |
 | Hyprland | Super+Alt+Return | `omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer`. Previously the single `Work` session. |
