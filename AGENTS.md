@@ -64,7 +64,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
 | `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. |
 | `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Removes a leftover `sessionizer` row if present. Super+Alt+Return stays. |
-| `~/.config/omarchy/shell.json` | Replaces the `omarchy.weather` (or leftover `$USER.weather`) bar slot with `omarchy-tuner.weather`. Does not rewrite other bar entries. |
+| `~/.config/omarchy/shell.json` | Replaces the `omarchy.weather` bar slot with `omarchy-tuner.weather`. Does not rewrite other bar entries. |
 
 ### New files only
 
@@ -216,4 +216,4 @@ the selector UI.
   inserted one.
 - Weather radar lives in `omarchy-tuner.weather` (cloned from `omarchy.weather`).
   IPC `moduleName` stays `omarchy.weather`. Do not `omarchy plugin clone`
-  weather again; that creates `$USER.weather`, which install removes.
+  weather again; that creates `$USER.weather`.

@@ -258,7 +258,7 @@ PY
   esac
 }
 
-# Replace the stock (or leftover username-prefixed) weather pill with ours.
+# Replace the stock weather pill with ours.
 replace_bar_widget_id() {
   local file="$HOME/.config/omarchy/shell.json"
   local from_ids="$1" to_id="$2"
@@ -338,28 +338,6 @@ PY
     drift=1
     ;;
   esac
-}
-
-# Username-prefixed clone from `omarchy plugin clone omarchy.weather`.
-remove_legacy_weather_clone() {
-  local dest="$HOME/.config/omarchy/plugins/omarchy-tuner.weather"
-  local user="${USER:-$(id -un)}"
-  local dir
-  for dir in "$HOME/.config/omarchy/plugins/${user}.weather" "$HOME/.config/omarchy/plugins/matthew.weather"; do
-    [[ $dir != "$dest" ]] || continue
-    [[ -e $dir ]] || continue
-    if is_check; then
-      warn "legacy weather plugin $dir"
-      drift=1
-      continue
-    fi
-    if [[ -L $dir ]]; then
-      rm -f "$dir"
-    else
-      rm -rf "$dir"
-    fi
-    note "removed legacy weather plugin $dir"
-  done
 }
 
 # Drop a leftover sessionizer menu row. Super+Alt+Return is the launcher.
@@ -519,9 +497,8 @@ ensure_symlink "$SZ/share/sessionizer.lua" "$HOME/.config/nvim/lua/plugins/sessi
 ensure_symlink "$SZ/share/neo-tree.lua" "$HOME/.config/nvim/lua/plugins/sessionizer-neo-tree.lua"
 ensure_symlink "$ROOT/share/uwsm/env.d/20-ssh-agent" "$HOME/.config/uwsm/env.d/20-ssh-agent"
 
-remove_legacy_weather_clone
 ensure_symlink "$ROOT/share/omarchy/plugins/weather" "$HOME/.config/omarchy/plugins/omarchy-tuner.weather"
-replace_bar_widget_id "omarchy.weather,matthew.weather,${USER:-$(id -un)}.weather" "omarchy-tuner.weather"
+replace_bar_widget_id "omarchy.weather" "omarchy-tuner.weather"
 
 upsert_block "$HOME/.bashrc" "$mark_begin" "$mark_end" \
   "source $(printf '%q' "$SZ/share/bashrc")"
