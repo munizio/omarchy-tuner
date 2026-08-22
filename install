@@ -258,52 +258,98 @@ PY
   esac
 }
 
-# Merge the sessionizer menu row into the user Omarchy menu extension.
-upsert_menu() {
+# Drop a leftover sessionizer menu row. Super+Alt+Return is the launcher.
+remove_menu_row() {
   local file="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
-  if is_check; then
-    if [[ -f $file ]] && grep -q '"sessionizer"' "$file"; then
-      note "ok  menu row in $file"
-    else
-      warn "missing sessionizer menu row in $file"
-      drift=1
-    fi
-    return 0
-  fi
-  mkdir -p "$(dirname "$file")"
-  if [[ ! -f $file ]]; then
-    cp "$ROOT/share/omarchy-menu.jsonc" "$file"
-    note "wrote $file"
-    return 0
-  fi
-  if grep -q '"sessionizer"' "$file"; then
-    note "ok  menu row in $file"
-    return 0
-  fi
-  python3 - "$file" <<'PY'
-import pathlib, sys
+  local result
+  result="$(
+    CHECK="$CHECK" python3 - "$file" <<'PY'
+import os, pathlib, re, sys
+
 path = pathlib.Path(sys.argv[1])
+check = os.environ.get("CHECK") == "1"
+
+if not path.is_file():
+    print("ok")
+    raise SystemExit(0)
+
 text = path.read_text()
-row = '''  "sessionizer": {
-    "icon": "",
-    "label": "Sessionizer",
-    "action": "omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer",
-    "aliases": ["tmux", "projects", "work"],
-    "description": "Pick a ~/Work project and attach a tmux session"
-  }'''
-idx = text.rfind("}")
-if idx < 0:
-    raise SystemExit(f"install: {path} has no closing brace")
-head = text[:idx].rstrip()
-# Insert a comma after the last property if the object is not empty.
-stripped = "".join(line for line in head.splitlines() if not line.lstrip().startswith("//")).rstrip()
-if stripped.endswith("{") or stripped.endswith(","):
-    insert = "\n" + row + "\n"
-else:
-    insert = ",\n" + row + "\n"
-path.write_text(head + insert + text[idx:])
+match = re.search(r'"sessionizer"\s*:', text)
+if not match:
+    print("ok")
+    raise SystemExit(0)
+
+if check:
+    print("present")
+    raise SystemExit(0)
+
+start = match.start()
+i = start - 1
+while i >= 0 and text[i] in " \t":
+    i -= 1
+if i >= 0 and text[i] == ",":
+    start = i
+
+j = match.end()
+while j < len(text) and text[j] in " \t\r\n":
+    j += 1
+if j >= len(text) or text[j] != "{":
+    print("error")
+    raise SystemExit(0)
+
+depth = 0
+in_str = False
+escape = False
+k = j
+while k < len(text):
+    c = text[k]
+    if in_str:
+        if escape:
+            escape = False
+        elif c == "\\":
+            escape = True
+        elif c == '"':
+            in_str = False
+        k += 1
+        continue
+    if c == '"':
+        in_str = True
+    elif c == "{":
+        depth += 1
+    elif c == "}":
+        depth -= 1
+        if depth == 0:
+            k += 1
+            break
+    k += 1
+end = k
+while end < len(text) and text[end] in " \t\r\n":
+    end += 1
+if match.start() == start and end < len(text) and text[end] == ",":
+    end += 1
+
+path.write_text(text[:start] + text[end:])
+print("removed")
 PY
-  note "added sessionizer menu row to $file"
+  )"
+  case "$result" in
+  ok)
+    if is_check; then
+      note "ok  no sessionizer menu row in $file"
+    fi
+    ;;
+  present)
+    warn "leftover sessionizer menu row in $file"
+    drift=1
+    ;;
+  removed)
+    note "removed sessionizer menu row from $file"
+    ;;
+  *)
+    warn "failed to update sessionizer menu row in $file"
+    drift=1
+    ;;
+  esac
 }
 
 write_hook() {
@@ -367,6 +413,7 @@ ensure_symlink "$SZ/bin/sessionizer" "$HOME/.local/bin/sessionizer"
 ensure_symlink "$SZ/bin/sessionizer-harness" "$HOME/.local/bin/sessionizer-harness"
 ensure_symlink "$SZ/share/sessionizer.lua" "$HOME/.config/nvim/lua/plugins/sessionizer.lua"
 ensure_symlink "$SZ/share/neo-tree.lua" "$HOME/.config/nvim/lua/plugins/sessionizer-neo-tree.lua"
+ensure_symlink "$ROOT/share/uwsm/env.d/20-ssh-agent" "$HOME/.config/uwsm/env.d/20-ssh-agent"
 
 upsert_block "$HOME/.bashrc" "$mark_begin" "$mark_end" \
   "source $(printf '%q' "$SZ/share/bashrc")"
@@ -383,7 +430,7 @@ upsert_block "$HOME/.config/hypr/bindings.lua" "$lua_begin" "$lua_end" "$binding
 input_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/input.lua")"
 upsert_block "$HOME/.config/hypr/input.lua" "$lua_begin" "$lua_end" "$input_body"
 
-upsert_menu
+remove_menu_row
 write_hook
 
 # Grok default render mode. Only touch the file if grok is present.

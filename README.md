@@ -1,8 +1,8 @@
 # omarchy-tuner
 
 Personalization layer on top of [Omarchy](https://omarchy.org/). Clone this after
-a fresh Omarchy install, run `./install`, and the machine picks up the binds,
-menu row, and tools below.
+a fresh Omarchy install, run `./install`, and the machine picks up the binds
+and tools below.
 
 Safe to re-run. `./install --check` reports drift without writing.
 
@@ -38,13 +38,14 @@ Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 - `~/.grok/config.toml` — `[ui] screen_mode = "minimal"` (only if grok is present)
 - `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces
 - `~/.config/hypr/input.lua` — Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, two-finger right-click, no tap-click
-- `~/.config/omarchy/extensions/omarchy-menu.jsonc` — Sessionizer menu row
+- `~/.config/omarchy/extensions/omarchy-menu.jsonc` — strips a leftover Sessionizer row if a previous install added one
 
 And it adds:
 
 - `~/.local/bin/sessionizer` and `sessionizer-harness` (symlinks)
 - `~/.config/nvim/lua/plugins/sessionizer.lua` (Ctrl+F in nvim)
 - `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` (wipe leftover `[No Name]` after Neo-tree opens a file)
+- `~/.config/uwsm/env.d/20-ssh-agent` (`SSH_AUTH_SOCK` for the OpenSSH user agent)
 - `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` (re-applies after `omarchy update`)
 
 A previous `sessionizer` or `omarchy-tune` install is migrated: old marked

@@ -5,12 +5,12 @@ of truth. `./install` symlinks binaries into `~/.local/bin` and wires user
 config. Editing the repo is live after install.
 
 `sessionizer/` is the Primeagen-style tmux picker. The command name stays
-`sessionizer`. Do not rename the binaries, `~/.config/sessionizer/`, the menu
-row key, or the Hyprland app-id.
+`sessionizer`. Do not rename the binaries, `~/.config/sessionizer/`, or the
+Hyprland app-id.
 
 No compiler, package, or extra runtime. Dependencies are bash, tmux ≥ 3.3
 (for fzf `--tmux`), and fzf ≥ 0.53 (Omarchy already has these). python3 is
-used by the installer (menu merge and grok toml).
+used by the installer (menu row removal and grok toml).
 
 ## Layout
 
@@ -27,7 +27,7 @@ used by the installer (menu merge and grok toml).
 | `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+X kill-window (overrides Omarchy defaults) |
 | `share/bindings.lua` | Hyprland Super+Alt+Return and Ctrl+1–0 / H / L workspaces |
 | `share/input.lua` | Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, clickfinger, no tap-click |
-| `share/omarchy-menu.jsonc` | Omarchy menu row (template; installer merges) |
+| `share/uwsm/env.d/20-ssh-agent` | `SSH_AUTH_SOCK` for the OpenSSH user agent. Does not enable the socket. |
 | `install` | Idempotent installer for the whole repo. `--check` is the drift test. |
 | `tests/run` | Runs `sessionizer/tests/run`. |
 
@@ -62,7 +62,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.grok/config.toml` | Sets `[ui] screen_mode = "minimal"`. Only written if `grok` is on PATH or the file already exists. |
 | `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
 | `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. |
-| `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Adds a `sessionizer` row if missing. Does **not** rewrite an existing row. |
+| `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Removes a leftover `sessionizer` row if present. Super+Alt+Return stays. |
 
 ### New files only
 
@@ -72,6 +72,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.local/bin/sessionizer-harness` | symlink → `sessionizer/bin/sessionizer-harness` |
 | `~/.config/nvim/lua/plugins/sessionizer.lua` | symlink → `sessionizer/share/sessionizer.lua` |
 | `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` | symlink → `sessionizer/share/neo-tree.lua` (no-op unless Neo-tree is already installed) |
+| `~/.config/uwsm/env.d/20-ssh-agent` | symlink → `share/uwsm/env.d/20-ssh-agent` (`SSH_AUTH_SOCK`). Socket is not enabled by install. |
 | `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` | generated; `exec $ROOT/install` after `omarchy update` |
 
 Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua`
@@ -203,5 +204,9 @@ the selector UI.
   appear until the user kills the session.
 - Super+Alt+Return launches sessionizer in tmux. Do not add a herdr backend
   or write `~/.config/herdr/`.
-- `upsert_menu` is insert-if-missing. Changing the menu action later needs
-  an edit of the user's jsonc (or a smarter installer).
+- `20-ssh-agent` only exports `SSH_AUTH_SOCK`. Do not enable `ssh-agent.socket`
+  or write `~/.ssh/config` from `./install`. UWSM env applies on the next
+  graphical session.
+- Do not add a Sessionizer row to the Omarchy menu. `remove_menu_row` strips
+  a leftover `sessionizer` key from the user jsonc if a previous install
+  inserted one.
