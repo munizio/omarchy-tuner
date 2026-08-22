@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pick a ~/Work project (or existing tmux session / herdr workspace) and attach.
+# Pick a ~/Work project (or existing tmux session) and attach.
 set -euo pipefail
 
 # Resolve the install symlink before taking .. — lib lives next to this file,
@@ -28,24 +28,20 @@ usage() {
 Usage: sessionizer [OPTIONS] [PROJECT]
 
   sessionizer              Fuzzy-pick a ~/Work folder, ~/.config, or session
-  sessionizer <dir>        Attach or create a session for that directory
+  sessionizer <dir>        Attach or create a tmux session for that directory
   sessionizer <name>       Match a listed dir or existing session by name
-
-  Inside herdr this creates/focuses a workspace. Otherwise it uses tmux.
-  Set SESSIONIZER_BACKEND=herdr to use herdr from a bare terminal too.
 
 Options:
   -h, --help     Show this help
   --list         Print picker rows (label<TAB>target) and exit
-  --name <path>  Print the session/workspace name for a path and exit
+  --name <path>  Print the session name for a path and exit
 EOF
 }
 
 sessionizer_picker_rows() {
-  local backend current="" name dir label wid
-  backend="$(sessionizer_backend)"
+  local current="" name dir
 
-  if [[ $list_sessions == true && $backend == tmux ]]; then
+  if [[ $list_sessions == true ]]; then
     if [[ -n ${TMUX:-} ]]; then
       current="$(sessionizer_tmux display-message -p '#S' 2>/dev/null || true)"
     fi
@@ -55,13 +51,6 @@ sessionizer_picker_rows() {
         printf '[tmux] %s\tsession:%s\n' "$name" "$name"
       done < <(sessionizer_tmux list-sessions -F '#{session_name}' 2>/dev/null)
     fi
-  elif [[ $list_sessions == true && $backend == herdr ]]; then
-    if sessionizer_herdr_running; then
-      while IFS=$'\t' read -r label wid; do
-        [[ -n $label && -n $wid ]] || continue
-        printf '[herdr] %s\tworkspace:%s\n' "$label" "$wid"
-      done < <(sessionizer_herdr_workspace_rows)
-    fi
   fi
 
   while IFS= read -r dir; do
@@ -70,31 +59,18 @@ sessionizer_picker_rows() {
 }
 
 need_deps() {
-  local backend
-  backend="$(sessionizer_backend)"
   command -v fzf >/dev/null 2>&1 || {
     echo "sessionizer: fzf is not installed" >&2
     exit 1
   }
-  if [[ $backend == tmux ]]; then
-    command -v tmux >/dev/null 2>&1 || {
-      echo "sessionizer: tmux is not installed" >&2
-      exit 1
-    }
-  else
-    command -v herdr >/dev/null 2>&1 || {
-      echo "sessionizer: herdr is not installed" >&2
-      exit 1
-    }
-    command -v python3 >/dev/null 2>&1 || {
-      echo "sessionizer: python3 is required for herdr" >&2
-      exit 1
-    }
-  fi
+  command -v tmux >/dev/null 2>&1 || {
+    echo "sessionizer: tmux is not installed" >&2
+    exit 1
+  }
 }
 
 resolve_query() {
-  local q="$1" root dir matches=() base name backend wid
+  local q="$1" root dir matches=() base name
   q="${q/#\~/$HOME}"
   q="${q%/}"
 
@@ -103,17 +79,9 @@ resolve_query() {
     return 0
   fi
 
-  backend="$(sessionizer_backend)"
-  if [[ $backend == tmux ]]; then
-    if sessionizer_tmux has-session -t "=$q" 2>/dev/null; then
-      printf 'session:%s\n' "$q"
-      return 0
-    fi
-  elif [[ $backend == herdr ]] && sessionizer_herdr_running; then
-    if wid="$(sessionizer_herdr_workspace_id "$q")"; then
-      printf 'workspace:%s\n' "$wid"
-      return 0
-    fi
+  if sessionizer_tmux has-session -t "=$q" 2>/dev/null; then
+    printf 'session:%s\n' "$q"
+    return 0
   fi
 
   for root in "${SESSIONIZER_ROOTS[@]}"; do
@@ -198,50 +166,6 @@ create_session() {
   sessionizer_tmux select-window -t "$name:nvim"
 }
 
-create_workspace() {
-  local name="$1" dir="$2"
-  local editor harness created tab_id pane_id ws_id scratch scratch_pane split split_pane
-  editor="$(sessionizer_resolve_editor)"
-  harness="$(command -v sessionizer-harness)"
-  if [[ -z $harness ]]; then
-    harness="$SESSIONIZER_ROOT/bin/sessionizer-harness"
-  fi
-
-  created="$(sessionizer_herdr workspace create --cwd "$dir" --label "$name")"
-  ws_id="$(printf '%s' "$created" | sessionizer_json_get result.workspace.workspace_id)"
-  tab_id="$(printf '%s' "$created" | sessionizer_json_get result.tab.tab_id)"
-  pane_id="$(printf '%s' "$created" | sessionizer_json_get result.root_pane.pane_id)"
-
-  sessionizer_herdr tab rename "$tab_id" nvim >/dev/null
-  # pane run types the argv into the shell. Do not pass "--"; herdr sends it.
-  sessionizer_herdr pane run "$pane_id" "$editor" . >/dev/null
-
-  scratch="$(sessionizer_herdr tab create --workspace "$ws_id" --cwd "$dir" --label scratch --no-focus)"
-  scratch_pane="$(printf '%s' "$scratch" | sessionizer_json_get result.root_pane.pane_id)"
-  split="$(sessionizer_herdr pane split --pane "$scratch_pane" --direction right --cwd "$dir" --no-focus)"
-  split_pane="$(printf '%s' "$split" | sessionizer_json_get result.pane.pane_id)"
-  sessionizer_herdr pane run "$split_pane" "$harness" >/dev/null
-
-  sessionizer_herdr tab focus "$tab_id" >/dev/null
-}
-
-# Focus a workspace. Attach the herdr TUI only from a real TTY outside herdr
-# so tests (no TTY) still create the workspace and return.
-herdr_switch() {
-  sessionizer_herdr workspace focus "$1" >/dev/null
-  if [[ ${HERDR_ENV:-} == 1 ]]; then
-    return 0
-  fi
-  if [[ ! -t 0 || ! -t 1 ]]; then
-    return 0
-  fi
-  if [[ -n ${SESSIONIZER_HERDR_SESSION:-} ]]; then
-    exec herdr --session "$SESSIONIZER_HERDR_SESSION"
-  else
-    exec herdr
-  fi
-}
-
 user_selected=""
 do_list=0
 
@@ -293,7 +217,7 @@ need_deps
 
 # A Hyprland-launched terminal closes instantly on error. Pause so the
 # message is readable. fzf cancel is exit 0 and must not pause.
-if [[ -z ${TMUX:-} && ${HERDR_ENV:-} != 1 && -t 2 ]]; then
+if [[ -z ${TMUX:-} && -t 2 ]]; then
   trap 'code=$?; if ((code != 0)); then printf "\nsessionizer failed (%s). Press enter to close.\n" "$code" >&2; read -r _ || true; fi' EXIT
 fi
 
@@ -308,24 +232,7 @@ if [[ $selected == session:* ]]; then
   exit 0
 fi
 
-if [[ $selected == workspace:* ]]; then
-  herdr_switch "${selected#workspace:}"
-  exit 0
-fi
-
 selected_name="$(sessionizer_name "$selected")"
-
-if [[ $(sessionizer_backend) == herdr ]]; then
-  sessionizer_herdr_ensure_server
-  if wid="$(sessionizer_herdr_workspace_id "$selected_name")"; then
-    herdr_switch "$wid"
-  else
-    create_workspace "$selected_name" "$selected"
-    wid="$(sessionizer_herdr_workspace_id "$selected_name")"
-    herdr_switch "$wid"
-  fi
-  exit 0
-fi
 
 if ! sessionizer_tmux list-sessions >/dev/null 2>&1 || ! has_session "$selected_name"; then
   create_session "$selected_name" "$selected"

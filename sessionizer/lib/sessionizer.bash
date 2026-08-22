@@ -40,7 +40,6 @@ sessionizer_load_config() {
     SESSIONIZER_EXTRAS=("$HOME/.config")
   fi
   : "${SESSIONIZER_DEPTH:=1}"
-  : "${SESSIONIZER_BACKEND:=auto}"
   if [[ -f $config ]]; then
     # shellcheck disable=SC1090
     source "$config"
@@ -51,7 +50,6 @@ sessionizer_load_config() {
   if [[ ! -v SESSIONIZER_EXTRAS ]]; then
     SESSIONIZER_EXTRAS=("$HOME/.config")
   fi
-  : "${SESSIONIZER_BACKEND:=auto}"
 }
 
 sessionizer_tmux() {
@@ -62,129 +60,10 @@ sessionizer_tmux() {
   fi
 }
 
-# auto: HERDR_ENV=1 → herdr, otherwise tmux.
-# herdr / tmux: force that backend (desktop Super+Alt+Return stays tmux unless herdr).
-sessionizer_backend() {
-  local backend="${SESSIONIZER_BACKEND:-auto}"
-  case "$backend" in
-  herdr | tmux)
-    printf '%s\n' "$backend"
-    ;;
-  auto)
-    if [[ ${HERDR_ENV:-} == 1 ]]; then
-      printf 'herdr\n'
-    else
-      printf 'tmux\n'
-    fi
-    ;;
-  *)
-    echo "sessionizer: unknown SESSIONIZER_BACKEND: $backend" >&2
-    return 1
-    ;;
-  esac
-}
-
-# Talk to a herdr session socket. SESSIONIZER_HERDR_SESSION selects a named
-# session (tests). Unset means the default session.
-sessionizer_herdr() {
-  if [[ -n ${SESSIONIZER_HERDR_SESSION:-} ]]; then
-    command herdr --session "$SESSIONIZER_HERDR_SESSION" "$@"
-  else
-    command herdr "$@"
-  fi
-}
-
-sessionizer_herdr_session_name() {
-  printf '%s\n' "${SESSIONIZER_HERDR_SESSION:-default}"
-}
-
-# True when that herdr session's server is up. Uses `herdr session list`
-# (no --session) so it works before the server exists.
-sessionizer_herdr_running() {
-  local name json
-  name="$(sessionizer_herdr_session_name)"
-  json="$(command herdr session list --json 2>/dev/null)" || return 1
-  printf '%s' "$json" | python3 -c '
-import json, sys
-name = sys.argv[1]
-data = json.load(sys.stdin)
-for session in data.get("sessions", []):
-    if session.get("name") == name and session.get("running"):
-        raise SystemExit(0)
-raise SystemExit(1)
-' "$name"
-}
-
-sessionizer_herdr_ensure_server() {
-  local i
-  if sessionizer_herdr_running; then
-    return 0
-  fi
-  sessionizer_herdr server >/dev/null 2>&1 &
-  for i in $(seq 1 50); do
-    if sessionizer_herdr_running; then
-      return 0
-    fi
-    sleep 0.1
-  done
-  echo "sessionizer: herdr server failed to start" >&2
-  return 1
-}
-
-# Read JSON from stdin and print a dotted path (result.workspace.workspace_id).
-sessionizer_json_get() {
-  python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-cur = data
-for part in sys.argv[1].split("."):
-    if isinstance(cur, dict) and part in cur:
-        cur = cur[part]
-    else:
-        raise SystemExit(1)
-if isinstance(cur, (dict, list)):
-    json.dump(cur, sys.stdout)
-    sys.stdout.write("\n")
-else:
-    print(cur)
-' "$1"
-}
-
-# Print label<TAB>workspace_id for labeled workspaces, skipping current.
-sessionizer_herdr_workspace_rows() {
-  local json current="${HERDR_WORKSPACE_ID:-}"
-  json="$(sessionizer_herdr workspace list 2>/dev/null)" || return 0
-  printf '%s' "$json" | python3 -c '
-import json, sys
-current = sys.argv[1]
-data = json.load(sys.stdin)
-for workspace in data.get("result", {}).get("workspaces", []):
-    label = workspace.get("label") or ""
-    wid = workspace.get("workspace_id") or ""
-    if not label or not wid or wid == current:
-        continue
-    print(f"{label}\t{wid}")
-' "$current"
-}
-
-sessionizer_herdr_workspace_id() {
-  local label="$1" json
-  json="$(sessionizer_herdr workspace list 2>/dev/null)" || return 1
-  printf '%s' "$json" | python3 -c '
-import json, sys
-want = sys.argv[1]
-data = json.load(sys.stdin)
-for workspace in data.get("result", {}).get("workspaces", []):
-    if workspace.get("label") == want:
-        print(workspace["workspace_id"])
-        raise SystemExit(0)
-raise SystemExit(1)
-' "$label"
-}
-
-# fzf display args. Inside herdr never use --tmux (herdr can sit inside tmux).
+# fzf display args. Inside tmux this is fzf's own popup; callers must
+# NOT wrap sessionizer in tmux display-popup (that nests and fails silently).
 sessionizer_fzf_display_args() {
-  if [[ -n ${TMUX:-} && ${HERDR_ENV:-} != 1 ]]; then
+  if [[ -n ${TMUX:-} ]]; then
     printf '%s\n' --tmux=center,80%,70%
   else
     printf '%s\n' --height=100%
@@ -233,13 +112,9 @@ sessionizer_list_harnesses() {
 sessionizer_agent_argv() {
   local agent="$1"
   case "$agent" in
-  opencode) printf '%s\n' opencode --auto ;;
-  gemini) printf '%s\n' gemini --yolo ;;
-  copilot) printf '%s\n' copilot --allow-all ;;
-  crush) printf '%s\n' crush --yolo ;;
-  claude | grok) printf '%s\n' "$agent" --permission-mode bypassPermissions ;;
-  codex) printf '%s\n' codex --dangerously-bypass-approvals-and-sandbox ;;
-  omp) printf '%s\n' omp --auto-approve ;;
+  opencode) printf '%s\n' opencode ;;
+  claude | grok) printf '%s\n' "$agent" ;;
+  omp) printf '%s\n' omp ;;
   pi) printf '%s\n' pi ;;
   shell) printf '%s\n' "${SHELL:-bash}" ;;
   *)
@@ -249,9 +124,7 @@ sessionizer_agent_argv() {
   esac
 }
 
-# Project picker. Inside tmux this is fzf's own popup (--tmux), so callers
-# must NOT wrap sessionizer in display-popup (that nests and fails silently).
-# Inside herdr the keybind already opens a popup; use inline fzf there.
+# Project picker. Inside tmux this is fzf's own popup (--tmux).
 sessionizer_pick_row() {
   local prompt="${1:-session> }"
   shift

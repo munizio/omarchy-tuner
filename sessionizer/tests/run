@@ -33,20 +33,7 @@ assert_ok() {
 }
 
 WORKDIR="$(mktemp -d)"
-HERDR_TEST_SESSION=""
-# Drop inherited live-session env before any herdr CLI. Running these
-# tests from a herdr pane would otherwise send `herdr --session` to the
-# user's TUI (HERDR_SOCKET_PATH) and create a workspace named sessionizer.
-detach_live_herdr() {
-  unset HERDR_ENV HERDR_SOCKET_PATH HERDR_SESSION HERDR_CLIENT_SOCKET_PATH \
-    HERDR_WORKSPACE_ID HERDR_TAB_ID HERDR_PANE_ID
-}
 cleanup() {
-  detach_live_herdr
-  if [[ -n $HERDR_TEST_SESSION ]]; then
-    herdr session stop "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
-    herdr session delete "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
-  fi
   rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
@@ -111,28 +98,12 @@ assert_eq "omp flags" "$(sessionizer_agent_argv omp | paste -sd' ' -)" "omp --au
 assert_eq "pi flags" "$(sessionizer_agent_argv pi | paste -sd' ' -)" "pi"
 assert_eq "shell argv" "$(sessionizer_agent_argv shell)" "${SHELL:-bash}"
 
-# --- backend selection ---
-unset HERDR_ENV TMUX
-SESSIONIZER_BACKEND=auto
-assert_eq "auto outside is tmux" "$(sessionizer_backend)" "tmux"
-HERDR_ENV=1
-assert_eq "auto inside herdr is herdr" "$(sessionizer_backend)" "herdr"
-SESSIONIZER_BACKEND=herdr
-unset HERDR_ENV
-assert_eq "explicit herdr" "$(sessionizer_backend)" "herdr"
-SESSIONIZER_BACKEND=tmux
-HERDR_ENV=1
-assert_eq "explicit tmux wins" "$(sessionizer_backend)" "tmux"
-unset HERDR_ENV SESSIONIZER_BACKEND
-
-# --- fzf display: herdr never uses --tmux ---
-unset TMUX HERDR_ENV
+# --- fzf display ---
+unset TMUX
 assert_eq "fzf outside is fullscreen" "$(sessionizer_fzf_display_args)" "--height=100%"
 TMUX=1
 assert_eq "fzf inside tmux is popup" "$(sessionizer_fzf_display_args)" "--tmux=center,80%,70%"
-HERDR_ENV=1
-assert_eq "fzf inside herdr is inline" "$(sessionizer_fzf_display_args)" "--height=100%"
-unset TMUX HERDR_ENV
+unset TMUX
 
 # --- CLI --name / --list ---
 assert_eq "cli --name" "$("$ROOT/bin/sessionizer" --name "$WORKDIR/Work/foo.bar")" "foo_bar"
@@ -188,122 +159,6 @@ ln -s "$target" "$hop"
 assert_eq "realpath follows symlink" "$(sessionizer_realpath "$target")" "$(readlink -f "$target")"
 assert_eq "walk follows two hops" "$(sessionizer_realpath_walk "$hop")" "$(readlink -f "$hop")"
 assert_eq "realpath of this lib" "$(sessionizer_realpath "$ROOT/lib/sessionizer.bash")" "$(readlink -f "$ROOT/lib/sessionizer.bash")"
-
-# --- herdr backend (optional; skip if herdr is not installed) ---
-if ! command -v herdr >/dev/null 2>&1; then
-  printf 'ok  herdr skipped (not installed)\n'
-  pass=$((pass + 1))
-else
-  detach_live_herdr
-  HERDR_TEST_SESSION="sessionizer-test-$$"
-  export SESSIONIZER_HERDR_SESSION="$HERDR_TEST_SESSION"
-  export SESSIONIZER_BACKEND=herdr
-  export HOME="$WORKDIR"
-  export XDG_CONFIG_HOME="$WORKDIR/.config"
-  cat >"$WORKDIR/.config/sessionizer/config" <<EOF
-SESSIONIZER_ROOTS=("$WORKDIR/Work")
-SESSIONIZER_DEPTH=1
-SESSIONIZER_BACKEND=herdr
-SESSIONIZER_HERDR_SESSION="$HERDR_TEST_SESSION"
-EOF
-
-  list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
-  assert_ok "herdr --list dirs without server" 'grep -q "sessionizer	" <<<"$list"'
-  assert_ok "herdr --list no herdr rows without server" '! grep -q "^\[herdr\]" <<<"$list"'
-
-  herdr --session "$HERDR_TEST_SESSION" server >/dev/null 2>&1 &
-  ready=0
-  for _ in $(seq 1 50); do
-    if sessionizer_herdr_running; then
-      ready=1
-      break
-    fi
-    sleep 0.1
-  done
-  test_dir="$(command herdr session list --json 2>/dev/null | python3 -c '
-import json, sys
-name = sys.argv[1]
-data = json.load(sys.stdin)
-for session in data.get("sessions", []):
-    if session.get("name") == name:
-        print(session.get("session_dir") or "")
-        raise SystemExit(0)
-raise SystemExit(0)
-' "$HERDR_TEST_SESSION")"
-  default_dir="$(command herdr session list --json 2>/dev/null | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-for session in data.get("sessions", []):
-    if session.get("default") or session.get("name") == "default":
-        print(session.get("session_dir") or "")
-        raise SystemExit(0)
-raise SystemExit(0)
-')"
-  if [[ $ready -ne 1 ]]; then
-    printf 'FAIL herdr server start\n'
-    fail=$((fail + 1))
-  elif [[ -z $test_dir || $test_dir == "$default_dir" ]]; then
-    printf 'FAIL herdr test session is not isolated\n'
-    fail=$((fail + 1))
-    herdr session stop "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
-    herdr session delete "$HERDR_TEST_SESSION" >/dev/null 2>&1 || true
-    HERDR_TEST_SESSION=""
-  else
-    assert_ok "herdr server started" 'true'
-    "$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true
-    if wid="$(sessionizer_herdr_workspace_id sessionizer)"; then
-      assert_ok "created herdr workspace" 'true'
-      tab_labels="$(herdr --session "$HERDR_TEST_SESSION" tab list --workspace "$wid" | python3 -c '
-import json,sys
-data=json.load(sys.stdin)
-print(" ".join(t.get("label","") for t in data.get("result",{}).get("tabs",[])))
-')"
-      assert_ok "herdr nvim tab" '[[ $tab_labels == *nvim* ]]'
-      assert_ok "herdr scratch tab" '[[ $tab_labels == *scratch* ]]'
-      scratch_count="$(herdr --session "$HERDR_TEST_SESSION" pane list --workspace "$wid" | python3 -c '
-import json,sys
-data=json.load(sys.stdin)
-tabs={}
-labels={}
-# tab list is not in this payload; count panes per tab_id
-for p in data.get("result",{}).get("panes",[]):
-    tabs[p["tab_id"]] = tabs.get(p["tab_id"], 0) + 1
-print(max(tabs.values()) if tabs else 0)
-')"
-      assert_ok "herdr scratch has 2 panes" '[[ $scratch_count -ge 2 ]]'
-      # pane run types argv into the shell; a leading -- becomes "command not found".
-      sleep 0.3
-      pane_text=""
-      while IFS= read -r pid; do
-        pane_text+="$(herdr --session "$HERDR_TEST_SESSION" pane read "$pid" --source recent-unwrapped --lines 30)"
-        pane_text+=$'\n'
-      done < <(herdr --session "$HERDR_TEST_SESSION" pane list --workspace "$wid" | python3 -c '
-import json,sys
-data=json.load(sys.stdin)
-for p in data.get("result",{}).get("panes",[]):
-    print(p["pane_id"])
-')
-      assert_ok "herdr panes do not run leading --" '! grep -q "command not found: --" <<<"$pane_text"'
-      assert_ok "herdr did not type -- as the command" '! grep -qE "(^|[\"[:space:]])-- (nvim|/.*/sessionizer-harness)" <<<"$pane_text"'
-      list="$("$ROOT/bin/sessionizer" --list)"
-      assert_ok "herdr --list tags workspace" 'grep -q "^\[herdr\] sessionizer	workspace:" <<<"$list"'
-      list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
-      assert_ok "herdr --no-sessions hides workspace" '! grep -q "^\[herdr\]" <<<"$list"'
-      # Re-invoke must not create a second workspace with the same label.
-      "$ROOT/bin/sessionizer" "$WORKDIR/Work/sessionizer" </dev/null >/dev/null 2>&1 || true
-      ws_n="$(herdr --session "$HERDR_TEST_SESSION" workspace list | python3 -c '
-import json,sys
-data=json.load(sys.stdin)
-print(sum(1 for w in data["result"]["workspaces"] if w.get("label")=="sessionizer"))
-')"
-      assert_eq "herdr does not rebuild existing workspace" "$ws_n" "1"
-    else
-      printf 'FAIL created herdr workspace\n'
-      fail=$((fail + 1))
-    fi
-  fi
-  unset SESSIONIZER_BACKEND SESSIONIZER_HERDR_SESSION
-fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 exit $((fail > 0))

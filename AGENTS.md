@@ -9,9 +9,8 @@ config. Editing the repo is live after install.
 row key, or the Hyprland app-id.
 
 No compiler, package, or extra runtime. Dependencies are bash, tmux ≥ 3.3
-(for fzf `--tmux`), and fzf ≥ 0.53 (Omarchy already has these). herdr is
-optional; python3 is required only for the herdr backend (the installer
-already uses it).
+(for fzf `--tmux`), and fzf ≥ 0.53 (Omarchy already has these). python3 is
+used by the installer (menu merge and grok toml).
 
 ## Layout
 
@@ -21,13 +20,13 @@ already uses it).
 | `sessionizer/bin/sessionizer-harness` | Right-pane agent loop. Same symlink/`sessionizer_realpath` rule. |
 | `sessionizer/lib/sessionizer.bash` | Shared helpers. Sourced, never executed. |
 | `sessionizer/share/tmux.conf` | `C-f` (root) and prefix+`f` → `run-shell -b sessionizer` |
-| `sessionizer/share/herdr.toml` | herdr `ctrl+f` and prefix+`f` popup → `sessionizer` |
-| `sessionizer/share/bashrc` | bash Ctrl+F fallback when not inside tmux or herdr |
-| `sessionizer/share/sessionizer.lua` | nvim Ctrl+F fallback when not inside tmux or herdr |
+| `sessionizer/share/bashrc` | bash Ctrl+F fallback when not inside tmux |
+| `sessionizer/share/sessionizer.lua` | nvim Ctrl+F fallback when not inside tmux |
+| `sessionizer/share/neo-tree.lua` | Wipe leftover `[No Name]` after opening a file from Neo-tree (`nvim .`) |
 | `sessionizer/tests/run` | Sessionizer tests. No bats. |
 | `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+X kill-window (overrides Omarchy defaults) |
 | `share/bindings.lua` | Hyprland Super+Alt+Return and Ctrl+1–0 / H / L workspaces |
-| `share/input.lua` | Hyprland `kb_options` Caps Lock as Ctrl, mouse + touchpad `natural_scroll` |
+| `share/input.lua` | Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, clickfinger, no tap-click |
 | `share/omarchy-menu.jsonc` | Omarchy menu row (template; installer merges) |
 | `install` | Idempotent installer for the whole repo. `--check` is the drift test. |
 | `tests/run` | Runs `sessionizer/tests/run`. |
@@ -41,8 +40,8 @@ already uses it).
 
 New machine, or after changing `share/` / `sessionizer/share/` drop-ins that
 install copies into marked blocks: `./install`. Safe to re-run. It reloads
-tmux.conf if tmux is up, `herdr server reload-config` if herdr is up, and
-`hyprctl reload` + `hyprctl configerrors` if Hyprland is up.
+tmux.conf if tmux is up, and `hyprctl reload` + `hyprctl configerrors` if
+Hyprland is up.
 
 Do not edit `/usr/share/omarchy/`. User wiring is only under `~/.config/` and
 `~/.local/bin/`, behind `# omarchy-tuner:begin` / `# omarchy-tuner:end` (Lua uses
@@ -60,10 +59,9 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | --- | --- |
 | `~/.bashrc` | `source` of `sessionizer/share/bashrc` |
 | `~/.config/tmux/tmux.conf` | `source-file` of `sessionizer/share/tmux.conf` and `share/tmux.binds.conf`. `omarchy refresh tmux` overwrites this file; the post-update hook re-adds the block. |
-| `~/.config/herdr/config.toml` | `[[keys.command]]` popup binds for Ctrl+F and prefix+`f`. Sets `[keys] prefix` to `ctrl+a` (Omarchy ships `ctrl+space`). Other herdr keys stay Omarchy defaults. Only written if `herdr` is on PATH or the file already exists. |
 | `~/.grok/config.toml` | Sets `[ui] screen_mode = "minimal"`. Only written if `grok` is on PATH or the file already exists. |
 | `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
-| `~/.config/hypr/input.lua` | `kb_options = "nocaps:ctrl"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true` (Omarchy ships both as false). |
+| `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. |
 | `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Adds a `sessionizer` row if missing. Does **not** rewrite an existing row. |
 
 ### New files only
@@ -73,11 +71,15 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.local/bin/sessionizer` | symlink → `sessionizer/bin/sessionizer` |
 | `~/.local/bin/sessionizer-harness` | symlink → `sessionizer/bin/sessionizer-harness` |
 | `~/.config/nvim/lua/plugins/sessionizer.lua` | symlink → `sessionizer/share/sessionizer.lua` |
+| `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` | symlink → `sessionizer/share/neo-tree.lua` (no-op unless Neo-tree is already installed) |
 | `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` | generated; `exec $ROOT/install` after `omarchy update` |
 
-Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua` and `input.lua`), nvim `init.lua` /
-`keymaps.lua` / existing plugins, `~/.config/omarchy/defaults/agent`,
-`~/.config/omarchy/shell.json`, existing tmux sessions.
+Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua`
+and `input.lua`), nvim `init.lua` / `keymaps.lua` / existing plugins,
+`~/.config/omarchy/defaults/agent`, `~/.config/omarchy/shell.json`, existing
+tmux sessions. Do not write herdr config or change herdr's prefix. `./install`
+only strips leftover `# omarchy-tuner:` / `# sessionizer:` / `# omarchy-tune:`
+blocks from `~/.config/herdr/config.toml` if a previous install left them.
 
 `install` refuses to overwrite a non-symlink at a symlink destination.
 
@@ -88,10 +90,10 @@ Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua` an
 ```
 sessionizer              # fzf picker
 sessionizer <dir>        # attach/create for that path
-sessionizer <name>       # exact dir under a root, exact session/workspace, or unique basename prefix
-sessionizer --list       # label<TAB>target (existing sessions tagged [tmux] or [herdr], then dirs)
+sessionizer <name>       # exact dir under a root, exact session, or unique basename prefix
+sessionizer --list       # label<TAB>target (existing sessions tagged [tmux], then dirs)
 sessionizer --name <path>
-sessionizer --no-sessions   # hide the [tmux] / [herdr] rows (combine with --list)
+sessionizer --no-sessions   # hide the [tmux] rows (combine with --list)
 sessionizer-harness --list
 ```
 
@@ -103,26 +105,19 @@ Session name = `basename` with a leading `.` stripped, then `.` and `:` → `_`
 (`sessionizer_name`). So `~/.config` is the tmux session `config`. This repo
 lists as `omarchy-tuner`.
 
-Selecting an **existing** session or herdr workspace only attaches/switches.
-Layout is created only for brand-new sessions/workspaces. To apply a layout
-change, the user must kill that session (or close that herdr workspace) first.
-A leftover session named `sessionizer` or `omarchy-tune` will not become
-`omarchy-tuner` until it is killed and recreated.
+Selecting an **existing** session only attaches/switches. Layout is created
+only for brand-new sessions. To apply a layout change, the user must kill
+that session first. A leftover session named `sessionizer` or `omarchy-tune`
+will not become `omarchy-tuner` until it is killed and recreated.
 
 Inside tmux the picker is `fzf --tmux=center,80%,70%`. **Never wrap
 `sessionizer` in `tmux display-popup`** — that nests and fails silently.
-Inside herdr the keybind opens a `type = "popup"` and fzf is inline
-(`--height=100%`); do not also use `fzf --tmux` there (herdr can sit inside
-tmux). Outside both, fzf is fullscreen in the current terminal, then attach.
+Outside tmux, fzf is fullscreen in the current terminal, then attach.
 Hyprland launches via `omarchy-launch-tui`; if sessionizer exits non-zero in
-a non-tmux, non-herdr TTY it pauses so the window does not flash closed. fzf
-cancel is exit 0.
+a non-tmux TTY it pauses so the window does not flash closed. fzf cancel is
+exit 0.
 
 Private tmux server for tests: `SESSIONIZER_TMUX_SOCKET=...`.
-Private herdr session for tests: `SESSIONIZER_HERDR_SESSION=...`. Tests must
-unset `HERDR_ENV` / `HERDR_SOCKET_PATH` / `HERDR_SESSION` first — running
-inside a live herdr pane would otherwise create a `sessionizer` workspace
-in the user's TUI.
 
 Optional `~/.config/sessionizer/config` (sourced if present):
 
@@ -130,22 +125,7 @@ Optional `~/.config/sessionizer/config` (sourced if present):
 SESSIONIZER_ROOTS=("$HOME/Work")
 SESSIONIZER_DEPTH=1
 SESSIONIZER_EXTRAS=("$HOME/.config")
-SESSIONIZER_BACKEND=auto          # auto | tmux | herdr
-# SESSIONIZER_HERDR_SESSION=      # named herdr session; unset = default
 ```
-
-`SESSIONIZER_BACKEND` (`auto` if unset):
-
-| Value | Behavior |
-| --- | --- |
-| `auto` | `HERDR_ENV=1` → herdr workspace. Otherwise tmux (including Super+Alt+Return). |
-| `herdr` | Always herdr, including desktop launch. |
-| `tmux` | Always tmux. |
-
-On herdr, each project is a **workspace** labeled with `sessionizer_name`
-inside one herdr session (the default, or `SESSIONIZER_HERDR_SESSION`).
-That matches herdr's own model: tmux session → workspace, window → tab,
-pane → pane. Do not create one herdr session per project.
 
 `SESSIONIZER_ROOTS` and `SESSIONIZER_EXTRAS` are bash arrays. They are not
 exported to child processes; tests that exec `sessionizer/bin/sessionizer`
@@ -158,15 +138,14 @@ set `SESSIONIZER_EXTRAS=()` to hide it.
 1. Window `nvim` — `automatic-rename off`. Sends `nvim .` (or Omarchy's
    default *terminal* editor + ` .`). GUI editors fall back to nvim.
    Editor file: `~/.local/state/omarchy/defaults/editor`. Do not use `$EDITOR`
-   — on Omarchy that is `omarchy-launch-editor --inline`.
+   — on Omarchy that is `omarchy-launch-editor --inline`. Neo-tree hijacks
+   that directory and leaves a listed `[No Name]` buffer; `sessionizer-neo-tree.lua`
+   wipes it when a file is opened. Restart nvim to pick up the plugin.
 2. Window `scratch` — `automatic-rename off`. `split-window -h`: left is the
    default shell, right is `sessionizer-harness`. Focus stays on `nvim`.
 
 Omarchy tmux has `base-index 1` and global `automatic-rename on`; the
 per-window off is required so names stay `nvim` / `scratch`.
-
-The herdr layout is the same shape: tab `nvim` (`pane run` the editor), tab
-`scratch` split right onto `sessionizer-harness`, then focus `nvim`.
 
 ### Harness pane
 
@@ -194,8 +173,6 @@ the selector UI.
 | --- | --- |
 | tmux (anywhere) | Ctrl+F | Root table. Works in shell, nvim, and agent TUIs. This is the one the user actually uses. |
 | tmux | prefix+f (`C-a f`) | Same `run-shell -b sessionizer` |
-| herdr (anywhere) | Ctrl+F | `[[keys.command]]` popup. Same picker; creates/focuses a workspace. |
-| herdr | prefix+f (`C-a f`) | Same popup. Prefix is `ctrl+a`; other herdr keys stay Omarchy defaults. |
 | bash, not in tmux | Ctrl+F | Inserts `sessionizer` + newline. **Do not use `bind -x`** — fzf gets no TTY. |
 | nvim, not in tmux | `<C-f>` | `sessionizer/share/sessionizer.lua` |
 | Hyprland | Super+Alt+Return | `omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer`. Previously the single `Work` session. |
@@ -222,9 +199,9 @@ the selector UI.
 - Do not replace Omarchy's `tdl` / `tds` / `tsl` pane helpers.
 - After Hyprland bind edits: `hyprctl reload` then `hyprctl configerrors`
   must be empty. See the omarchy skill (`~/.agents/skills/omarchy/`).
-- Existing sessions and herdr workspaces are never rebuilt. Say so if a
-  layout change will not appear until the user kills the session (or
-  closes the herdr workspace).
-- Desktop Super+Alt+Return stays tmux unless `SESSIONIZER_BACKEND=herdr`.
+- Existing sessions are never rebuilt. Say so if a layout change will not
+  appear until the user kills the session.
+- Super+Alt+Return launches sessionizer in tmux. Do not add a herdr backend
+  or write `~/.config/herdr/`.
 - `upsert_menu` is insert-if-missing. Changing the menu action later needs
   an edit of the user's jsonc (or a smarter installer).

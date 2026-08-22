@@ -7,12 +7,11 @@ menu row, and tools below.
 Safe to re-run. `./install --check` reports drift without writing.
 
 Today the main tool is **sessionizer**, a Primeagen-style project picker.
-The command name stays `sessionizer`. Inside tmux it attaches a tmux session;
-inside herdr it focuses a herdr workspace. Super+Alt+Return stays tmux unless
-you set `SESSIONIZER_BACKEND=herdr`.
+The command name stays `sessionizer`. It attaches or creates a tmux session.
+Super+Alt+Return from the desktop launches that picker.
 
-Ctrl+F inside tmux or herdr (or Super+Alt+Return from the desktop) lists the
-folders in `~/Work`, plus `~/.config`. Picking one attaches:
+Ctrl+F inside tmux (or Super+Alt+Return from the desktop) lists the folders
+in `~/Work`, plus `~/.config`. Picking one attaches:
 
 | Window | Contents |
 | --- | --- |
@@ -36,20 +35,21 @@ Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 
 - `~/.bashrc` — Ctrl+F
 - `~/.config/tmux/tmux.conf` — prefix+f popup; prefix+|/- splits, hjkl panes, X kill-window
-- `~/.config/herdr/config.toml` — Ctrl+F and prefix+f popup; prefix `ctrl+a` (only if herdr is present). Other herdr keys stay Omarchy defaults.
 - `~/.grok/config.toml` — `[ui] screen_mode = "minimal"` (only if grok is present)
 - `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces
-- `~/.config/hypr/input.lua` — Caps Lock as Ctrl; mouse and touchpad natural scrolling
+- `~/.config/hypr/input.lua` — Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, two-finger right-click, no tap-click
 - `~/.config/omarchy/extensions/omarchy-menu.jsonc` — Sessionizer menu row
 
 And it adds:
 
 - `~/.local/bin/sessionizer` and `sessionizer-harness` (symlinks)
 - `~/.config/nvim/lua/plugins/sessionizer.lua` (Ctrl+F in nvim)
+- `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` (wipe leftover `[No Name]` after Neo-tree opens a file)
 - `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` (re-applies after `omarchy update`)
 
 A previous `sessionizer` or `omarchy-tune` install is migrated: old marked
-blocks and `sessionizer.hook` / `omarchy-tune.hook` are removed.
+blocks and `sessionizer.hook` / `omarchy-tune.hook` are removed. Leftover
+herdr marked blocks are stripped; herdr is not configured.
 
 Nothing under `/usr/share/omarchy/` is touched.
 
@@ -82,13 +82,7 @@ The first file is Ctrl+F and prefix+`f` → sessionizer. Do not wrap that in `di
 tmux source-file ~/.config/tmux/tmux.conf
 ```
 
-### herdr
-
-Append `sessionizer/share/herdr.toml` to `~/.config/herdr/config.toml`, then `herdr server reload-config`.
-
-`auto` backend: herdr only when already inside herdr; otherwise tmux.
-
-### Optional (outside tmux / herdr)
+### Optional (outside tmux)
 
 ```zsh
 # ~/.zshrc
@@ -97,6 +91,7 @@ bindkey -s '^F' '^Usessionizer\n'
 
 ```bash
 ln -sfn ~/Work/omarchy-tuner/sessionizer/share/sessionizer.lua ~/.config/nvim/lua/plugins/sessionizer.lua
+ln -sfn ~/Work/omarchy-tuner/sessionizer/share/neo-tree.lua ~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua
 ```
 
 No Super+Alt+Return equivalent. Existing sessions are not rebuilt.
@@ -109,8 +104,8 @@ sessionizer ~/Work/foo   # jump straight there
 sessionizer foo          # match a ~/Work child or existing session
 ```
 
-Inside tmux the picker is a popup. Inside herdr it is a herdr popup. Outside
-both, fzf runs in the current terminal and then attaches.
+Inside tmux the picker is a popup. Outside tmux, fzf runs in the current
+terminal and then attaches.
 
 ## Config
 
@@ -120,11 +115,7 @@ Optional `~/.config/sessionizer/config`:
 SESSIONIZER_ROOTS=("$HOME/Work")
 SESSIONIZER_DEPTH=1
 SESSIONIZER_EXTRAS=("$HOME/.config")   # listed as itself, not scanned
-SESSIONIZER_BACKEND=auto               # auto | tmux | herdr
 ```
-
-`auto` uses herdr only when already inside herdr (`HERDR_ENV=1`). Set
-`SESSIONIZER_BACKEND=herdr` to make Super+Alt+Return attach herdr too.
 
 ## Tests
 
