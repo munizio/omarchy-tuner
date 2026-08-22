@@ -39,6 +39,7 @@ Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 - `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces
 - `~/.config/hypr/input.lua` — Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, two-finger right-click, no tap-click
 - `~/.config/omarchy/extensions/omarchy-menu.jsonc` — strips a leftover Sessionizer row if a previous install added one
+- `~/.config/omarchy/shell.json` — weather bar slot → `omarchy-tuner.weather` (live radar in the popup)
 
 And it adds:
 
@@ -46,6 +47,7 @@ And it adds:
 - `~/.config/nvim/lua/plugins/sessionizer.lua` (Ctrl+F in nvim)
 - `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` (wipe leftover `[No Name]` after Neo-tree opens a file)
 - `~/.config/uwsm/env.d/20-ssh-agent` (`SSH_AUTH_SOCK` for the OpenSSH user agent)
+- `~/.config/omarchy/plugins/omarchy-tuner.weather` (weather pill with RainViewer loop)
 - `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` (re-applies after `omarchy update`)
 
 A previous `sessionizer` or `omarchy-tune` install is migrated: old marked
