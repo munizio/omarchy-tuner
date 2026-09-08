@@ -470,10 +470,12 @@ remove_block "$HOME/.bashrc" "$old_mark_begin" "$old_mark_end"
 remove_block "$HOME/.config/tmux/tmux.conf" "$old_mark_begin" "$old_mark_end"
 remove_block "$HOME/.config/hypr/bindings.lua" "$old_lua_begin" "$old_lua_end"
 remove_block "$HOME/.config/hypr/input.lua" "$old_lua_begin" "$old_lua_end"
+remove_block "$HOME/.config/hypr/looknfeel.lua" "$old_lua_begin" "$old_lua_end"
 remove_block "$HOME/.bashrc" "$prev_mark_begin" "$prev_mark_end"
 remove_block "$HOME/.config/tmux/tmux.conf" "$prev_mark_begin" "$prev_mark_end"
 remove_block "$HOME/.config/hypr/bindings.lua" "$prev_lua_begin" "$prev_lua_end"
 remove_block "$HOME/.config/hypr/input.lua" "$prev_lua_begin" "$prev_lua_end"
+remove_block "$HOME/.config/hypr/looknfeel.lua" "$prev_lua_begin" "$prev_lua_end"
 
 # Older installs wrote sessionizer binds into herdr. Strip those; this
 # repo is tmux-only now and does not touch herdr otherwise.
@@ -498,12 +500,17 @@ tmux_block=$(printf 'source-file %s\nsource-file %s' \
   "$(printf '%q' "$ROOT/share/tmux.binds.conf")")
 upsert_block "$HOME/.config/tmux/tmux.conf" "$mark_begin" "$mark_end" "$tmux_block"
 
-# Hyprland bindings.lua / input.lua use Lua comments.
+# Hyprland bindings.lua / input.lua / looknfeel.lua use Lua comments.
+# bindings: Sessionizer, Ctrl+workspace, mouse:275 flick between workspaces.
+# looknfeel: workspace slide animation (Omarchy default is off).
 bindings_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/bindings.lua")"
 upsert_block "$HOME/.config/hypr/bindings.lua" "$lua_begin" "$lua_end" "$bindings_body"
 
 input_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/input.lua")"
 upsert_block "$HOME/.config/hypr/input.lua" "$lua_begin" "$lua_end" "$input_body"
+
+looknfeel_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/looknfeel.lua")"
+upsert_block "$HOME/.config/hypr/looknfeel.lua" "$lua_begin" "$lua_end" "$looknfeel_body"
 
 remove_menu_row
 write_hook

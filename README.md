@@ -37,8 +37,9 @@ Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 - `~/.bashrc` — Ctrl+F
 - `~/.config/tmux/tmux.conf` — prefix+f popup; prefix+|/- splits, hjkl panes, X kill-window
 - `~/.grok/config.toml` — `[ui] screen_mode = "minimal"` (only if grok is present)
-- `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces
+- `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces; mouse:275 + horizontal flick between workspaces
 - `~/.config/hypr/input.lua` — Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, two-finger right-click, no tap-click
+- `~/.config/hypr/looknfeel.lua` — workspace slide animation (Omarchy default is off)
 - `~/.config/omarchy/extensions/omarchy-menu.jsonc` — strips a leftover Sessionizer row if a previous install added one
 - `~/.config/omarchy/shell.json` — leftover `omarchy-tuner.weather` → stock `omarchy.weather`
 

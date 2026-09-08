@@ -25,8 +25,9 @@ used by the installer (menu row removal, leftover weather bar id, and grok toml)
 | `sessionizer/share/neo-tree.lua` | Wipe leftover `[No Name]` after opening a file from Neo-tree (`nvim .`) |
 | `sessionizer/tests/run` | Sessionizer tests. No bats. |
 | `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+X kill-window (overrides Omarchy defaults) |
-| `share/bindings.lua` | Hyprland Super+Alt+Return and Ctrl+1–0 / H / L workspaces |
+| `share/bindings.lua` | Hyprland Super+Alt+Return, Ctrl+1–0 / H / L workspaces, mouse:275 workspace flick |
 | `share/input.lua` | Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, clickfinger, no tap-click |
+| `share/looknfeel.lua` | Workspace slide animation (Omarchy default is off) |
 | `share/uwsm/env.d/20-ssh-agent` | `SSH_AUTH_SOCK` for the OpenSSH user agent. Does not enable the socket. |
 | `install` | Idempotent installer for the whole repo. `--check` is the drift test. |
 | `tests/run` | Runs `sessionizer/tests/run`. |
@@ -60,8 +61,9 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.bashrc` | `source` of `sessionizer/share/bashrc` |
 | `~/.config/tmux/tmux.conf` | `source-file` of `sessionizer/share/tmux.conf` and `share/tmux.binds.conf`. `omarchy refresh tmux` overwrites this file; the post-update hook re-adds the block. |
 | `~/.grok/config.toml` | Sets `[ui] screen_mode = "minimal"`. Only written if `grok` is on PATH or the file already exists. |
-| `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
+| `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation and mouse:275 + horizontal flick (right → `e-1`, left → `e+1`). Super+number stays. |
 | `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. |
+| `~/.config/hypr/looknfeel.lua` | Enables `workspaces` slide animation (Omarchy ships it disabled). |
 | `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Removes a leftover `sessionizer` row if present. Super+Alt+Return stays. |
 | `~/.config/omarchy/shell.json` | Restores leftover `omarchy-tuner.weather` to `omarchy.weather`. Does not add weather if the slot is gone. Does not rewrite other bar entries. |
 
@@ -76,8 +78,8 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.config/uwsm/env.d/20-ssh-agent` | symlink → `share/uwsm/env.d/20-ssh-agent` (`SSH_AUTH_SOCK`). Socket is not enabled by install. |
 | `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` | generated; `exec $ROOT/install` after `omarchy update` |
 
-Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua`
-and `input.lua`), nvim `init.lua` / `keymaps.lua` / existing plugins,
+Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua`,
+`input.lua`, and `looknfeel.lua`), nvim `init.lua` / `keymaps.lua` / existing plugins,
 `~/.config/omarchy/defaults/agent`, existing tmux sessions. `shell.json` is
 only edited to restore leftover `omarchy-tuner.weather` → `omarchy.weather`.
 Do not clone weather or replace the stock bar widget. Do not write herdr
@@ -190,6 +192,7 @@ the selector UI.
 | Hyprland | Super+Alt+Return | `omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer`. Previously the single `Work` session. |
 | Hyprland | Ctrl+1–0 | Switch to workspace 1–10. Super+number is unchanged. |
 | Hyprland | Ctrl+H / Ctrl+L | Previous / next workspace. |
+| Hyprland | mouse:275 + horizontal flick | Side button (BTN_SIDE) hold + flick. Right → previous (`e-1`), left → next (`e+1`). Click without moving does nothing. `mouse:276` is the other side button. Consumes the button (browser back/forward will not fire). Workspace changes use Hyprland `slide`. |
 | tmux | prefix+\| / prefix+- | Split side-by-side / stacked. Overrides Omarchy prefix+h/v. |
 | tmux | prefix+h/j/k/l | Focus pane. prefix+k was kill-window. |
 | tmux | prefix+X | Kill window. prefix+x is still kill-pane. |
