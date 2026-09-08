@@ -10,7 +10,7 @@ Hyprland app-id.
 
 No compiler, package, or extra runtime. Dependencies are bash, tmux ≥ 3.3
 (for fzf `--tmux`), and fzf ≥ 0.53 (Omarchy already has these). python3 is
-used by the installer (menu row removal, bar widget id, and grok toml).
+used by the installer (menu row removal, leftover weather bar id, and grok toml).
 
 ## Layout
 
@@ -28,7 +28,6 @@ used by the installer (menu row removal, bar widget id, and grok toml).
 | `share/bindings.lua` | Hyprland Super+Alt+Return and Ctrl+1–0 / H / L workspaces |
 | `share/input.lua` | Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, clickfinger, no tap-click |
 | `share/uwsm/env.d/20-ssh-agent` | `SSH_AUTH_SOCK` for the OpenSSH user agent. Does not enable the socket. |
-| `share/omarchy/plugins/weather` | Cloned weather pill with RainViewer loop. Id `omarchy-tuner.weather`. |
 | `install` | Idempotent installer for the whole repo. `--check` is the drift test. |
 | `tests/run` | Runs `sessionizer/tests/run`. |
 
@@ -64,7 +63,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation. Super+number stays. |
 | `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. |
 | `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Removes a leftover `sessionizer` row if present. Super+Alt+Return stays. |
-| `~/.config/omarchy/shell.json` | Replaces the `omarchy.weather` bar slot with `omarchy-tuner.weather`. Does not rewrite other bar entries. |
+| `~/.config/omarchy/shell.json` | Restores leftover `omarchy-tuner.weather` to `omarchy.weather`. Does not add weather if the slot is gone. Does not rewrite other bar entries. |
 
 ### New files only
 
@@ -75,13 +74,13 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.config/nvim/lua/plugins/sessionizer.lua` | symlink → `sessionizer/share/sessionizer.lua` |
 | `~/.config/nvim/lua/plugins/sessionizer-neo-tree.lua` | symlink → `sessionizer/share/neo-tree.lua` (no-op unless Neo-tree is already installed) |
 | `~/.config/uwsm/env.d/20-ssh-agent` | symlink → `share/uwsm/env.d/20-ssh-agent` (`SSH_AUTH_SOCK`). Socket is not enabled by install. |
-| `~/.config/omarchy/plugins/omarchy-tuner.weather` | symlink → `share/omarchy/plugins/weather` |
 | `~/.config/omarchy/hooks/post-update.d/omarchy-tuner.hook` | generated; `exec $ROOT/install` after `omarchy update` |
 
 Never touch: `/usr/share/omarchy/**`, other hypr files (except `bindings.lua`
 and `input.lua`), nvim `init.lua` / `keymaps.lua` / existing plugins,
 `~/.config/omarchy/defaults/agent`, existing tmux sessions. `shell.json` is
-only edited to swap the weather bar widget id (see above). Do not write herdr
+only edited to restore leftover `omarchy-tuner.weather` → `omarchy.weather`.
+Do not clone weather or replace the stock bar widget. Do not write herdr
 config or change herdr's prefix. `./install` only strips leftover
 `# omarchy-tuner:` / `# sessionizer:` / `# omarchy-tune:` blocks from
 `~/.config/herdr/config.toml` if a previous install left them.
@@ -222,6 +221,6 @@ the selector UI.
 - Do not add a Sessionizer row to the Omarchy menu. `remove_menu_row` strips
   a leftover `sessionizer` key from the user jsonc if a previous install
   inserted one.
-- Weather radar lives in `omarchy-tuner.weather` (cloned from `omarchy.weather`).
-  IPC `moduleName` stays `omarchy.weather`. Do not `omarchy plugin clone`
-  weather again; that creates `$USER.weather`.
+- Do not ship a weather plugin. Stock `omarchy.weather` stays on the bar.
+  `./install` restores that id if a leftover `omarchy-tuner.weather` slot
+  remains, and removes `~/.config/omarchy/plugins/omarchy-tuner.weather`.

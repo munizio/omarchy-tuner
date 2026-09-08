@@ -258,86 +258,76 @@ PY
   esac
 }
 
-# Replace the stock weather pill with ours.
-replace_bar_widget_id() {
+# Previous installs swapped the stock weather pill. Put it back.
+# Do not add weather if the slot is gone; do not rewrite other bar entries.
+restore_stock_weather() {
   local file="$HOME/.config/omarchy/shell.json"
-  local from_ids="$1" to_id="$2"
+  local from_id="omarchy-tuner.weather"
+  local to_id="omarchy.weather"
   local result
   result="$(
-    CHECK="$CHECK" python3 - "$file" "$from_ids" "$to_id" <<'PY'
-import json, os, pathlib, sys
+    CHECK="$CHECK" python3 - "$file" "$from_id" "$to_id" <<'PY'
+import os, pathlib, sys
 
 path = pathlib.Path(sys.argv[1])
-from_ids = set(sys.argv[2].split(","))
-to_id = sys.argv[3]
+from_id, to_id = sys.argv[2], sys.argv[3]
 check = os.environ.get("CHECK") == "1"
+needle = f'"{from_id}"'
+replacement = f'"{to_id}"'
 
 if not path.is_file():
-    print("missing-file")
+    print("ok")
     raise SystemExit(0)
 
-data = json.loads(path.read_text())
-layout = data.get("bar", {}).get("layout")
-if not isinstance(layout, dict):
-    print("missing-file")
-    raise SystemExit(0)
-
-found_to = False
-changed = False
-for items in layout.values():
-    if not isinstance(items, list):
-        continue
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        wid = item.get("id")
-        if wid == to_id:
-            found_to = True
-        elif wid in from_ids:
-            item["id"] = to_id
-            found_to = True
-            changed = True
-
-if not found_to:
-    print("missing")
-    raise SystemExit(0)
-if not changed:
+text = path.read_text()
+if needle not in text:
     print("ok")
     raise SystemExit(0)
 if check:
     print("stale")
     raise SystemExit(0)
-
-newline = "\n" if "\r\n" not in path.read_text() else "\r\n"
-text = json.dumps(data, indent=2) + "\n"
-if newline != "\n":
-    text = text.replace("\n", newline)
-path.write_text(text)
+path.write_text(text.replace(needle, replacement))
 print("updated")
 PY
   )"
   case "$result" in
   ok)
     if is_check; then
-      note "ok  bar widget $to_id in $file"
+      note "ok  no leftover $from_id in $file"
     fi
     ;;
   stale)
-    warn "stale bar widget id in $file (want $to_id)"
-    drift=1
-    ;;
-  missing | missing-file)
-    warn "missing bar widget $to_id in $file"
+    warn "leftover bar widget $from_id in $file"
     drift=1
     ;;
   updated)
-    note "set bar widget $to_id in $file"
+    note "restored bar widget $to_id in $file"
     ;;
   *)
-    warn "failed to set bar widget $to_id in $file"
+    warn "failed to restore bar widget $to_id in $file"
     drift=1
     ;;
   esac
+}
+
+# Drop the cloned weather plugin symlink from a previous install.
+remove_leftover_symlink() {
+  local dest="$1"
+  if is_check; then
+    if [[ -L $dest || -e $dest ]]; then
+      warn "leftover $dest"
+      drift=1
+    else
+      note "ok  no leftover $dest"
+    fi
+    return 0
+  fi
+  if [[ -L $dest ]]; then
+    rm -f "$dest"
+    note "removed leftover symlink $dest"
+  elif [[ -e $dest ]]; then
+    warn "refusing to remove non-symlink $dest"
+  fi
 }
 
 # Drop a leftover sessionizer menu row. Super+Alt+Return is the launcher.
@@ -497,8 +487,8 @@ ensure_symlink "$SZ/share/sessionizer.lua" "$HOME/.config/nvim/lua/plugins/sessi
 ensure_symlink "$SZ/share/neo-tree.lua" "$HOME/.config/nvim/lua/plugins/sessionizer-neo-tree.lua"
 ensure_symlink "$ROOT/share/uwsm/env.d/20-ssh-agent" "$HOME/.config/uwsm/env.d/20-ssh-agent"
 
-ensure_symlink "$ROOT/share/omarchy/plugins/weather" "$HOME/.config/omarchy/plugins/omarchy-tuner.weather"
-replace_bar_widget_id "omarchy.weather" "omarchy-tuner.weather"
+restore_stock_weather
+remove_leftover_symlink "$HOME/.config/omarchy/plugins/omarchy-tuner.weather"
 
 upsert_block "$HOME/.bashrc" "$mark_begin" "$mark_end" \
   "source $(printf '%q' "$SZ/share/bashrc")"
