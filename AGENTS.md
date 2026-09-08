@@ -24,7 +24,7 @@ used by the installer (menu row removal, leftover weather bar id, and grok toml)
 | `sessionizer/share/sessionizer.lua` | nvim Ctrl+F fallback when not inside tmux |
 | `sessionizer/share/neo-tree.lua` | Wipe leftover `[No Name]` after opening a file from Neo-tree (`nvim .`) |
 | `sessionizer/tests/run` | Sessionizer tests. No bats. |
-| `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+X kill-window (overrides Omarchy defaults) |
+| `share/tmux.binds.conf` | prefix+`\|`/`-` splits, prefix+hjkl panes, prefix+`;` last pane (keep zoom), prefix+X kill-window (overrides Omarchy defaults) |
 | `share/bindings.lua` | Hyprland Super+Alt+Return, Ctrl+1–0 / H / L workspaces, mouse:275 workspace flick |
 | `share/input.lua` | Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, clickfinger, no tap-click |
 | `share/looknfeel.lua` | Workspace slide animation (Omarchy default is off) |
@@ -195,6 +195,7 @@ the selector UI.
 | Hyprland | mouse:275 + horizontal flick | Side button (BTN_SIDE) hold + flick. Right → previous ID, left → next ID. Does not wrap. An empty neighbor is allowed (one empty workspace past the occupied range). Click without moving does nothing. `mouse:276` is the other side button. Consumes the button (browser back/forward will not fire). Workspace changes use Hyprland `slide`. |
 | tmux | prefix+\| / prefix+- | Split side-by-side / stacked. Overrides Omarchy prefix+h/v. |
 | tmux | prefix+h/j/k/l | Focus pane. prefix+k was kill-window. |
+| tmux | prefix+`;` | Last pane, keep zoom (`select-pane -lZ`). |
 | tmux | prefix+X | Kill window. prefix+x is still kill-pane. |
 
 ## Invariants / landmines

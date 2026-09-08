@@ -35,7 +35,7 @@ cd ~/Work/omarchy-tuner
 Marked blocks only (`# omarchy-tuner:begin` … `# omarchy-tuner:end`):
 
 - `~/.bashrc` — Ctrl+F
-- `~/.config/tmux/tmux.conf` — prefix+f popup; prefix+|/- splits, hjkl panes, X kill-window
+- `~/.config/tmux/tmux.conf` — prefix+f popup; prefix+|/- splits, hjkl panes, `;` last pane (keep zoom), X kill-window
 - `~/.grok/config.toml` — `[ui] screen_mode = "minimal"` (only if grok is present)
 - `~/.config/hypr/bindings.lua` — Super+Alt+Return (was: attach to a session named `Work`); Ctrl+1–0 / H / L workspaces; mouse:275 + horizontal flick between workspaces
 - `~/.config/hypr/input.lua` — Caps Lock as Ctrl; natural scroll; touchpad disable-while-typing, two-finger right-click, no tap-click
@@ -80,7 +80,7 @@ source-file ~/Work/omarchy-tuner/sessionizer/share/tmux.conf
 source-file ~/Work/omarchy-tuner/share/tmux.binds.conf
 ```
 
-The first file is Ctrl+F and prefix+`f` → sessionizer. Do not wrap that in `display-popup`. The second is prefix `C-a`, `|/‑` splits, hjkl panes, `X` kill-window — skip it if you only want the picker.
+The first file is Ctrl+F and prefix+`f` → sessionizer. Do not wrap that in `display-popup`. The second is prefix `C-a`, `|/‑` splits, hjkl panes, `;` last pane (keep zoom), `X` kill-window — skip it if you only want the picker.
 
 ```bash
 tmux source-file ~/.config/tmux/tmux.conf
