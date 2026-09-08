@@ -93,11 +93,12 @@ config or change herdr's prefix. `./install` only strips leftover
 ### Picker
 
 ```
-sessionizer              # fzf picker
+sessionizer              # fzf picker ([ + New ] is the last row)
 sessionizer <dir>        # attach/create for that path
 sessionizer <name>       # exact dir under a root, exact session, or unique basename prefix
-sessionizer --list       # label<TAB>target (existing sessions tagged [tmux], then dirs)
+sessionizer --list       # label<TAB>target ([tmux] sessions, then dirs, then [ + New ])
 sessionizer --name <path>
+sessionizer --create [name] # mkdir under the first root and attach (prompt if no name)
 sessionizer --no-sessions   # hide the [tmux] rows (combine with --list)
 sessionizer-harness --list
 ```
@@ -105,6 +106,13 @@ sessionizer-harness --list
 Default roots: immediate children of `~/Work` (`SESSIONIZER_DEPTH=1`), including
 hidden dirs. `tries` is one row, not its children. `~/.config` is also
 one row (`SESSIONIZER_EXTRAS`); its children are not listed.
+
+Picking `[ + New ]` opens a second fzf prompt for a directory name (Enter
+prints the query; Escape cancels). The new folder is an immediate child of
+the first `SESSIONIZER_ROOTS` entry (`~/Work` by default). Names cannot
+contain `/`. If that directory already exists, it is reused. Then the usual
+new-session layout runs. `sessionizer --create <name>` skips the pickers.
+The name prompt is fzf, not `read` — Ctrl+F is `run-shell -b` and has no TTY.
 
 Session name = `basename` with a leading `.` stripped, then `.` and `:` → `_`
 (`sessionizer_name`). So `~/.config` is the tmux session `config`. This repo

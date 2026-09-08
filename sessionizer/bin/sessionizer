@@ -30,11 +30,16 @@ Usage: sessionizer [OPTIONS] [PROJECT]
   sessionizer              Fuzzy-pick a ~/Work folder, ~/.config, or session
   sessionizer <dir>        Attach or create a tmux session for that directory
   sessionizer <name>       Match a listed dir or existing session by name
+  sessionizer --create     Prompt for a name, mkdir under the first root, attach
+  sessionizer --create <name>
+                           mkdir under the first root and attach
 
 Options:
-  -h, --help     Show this help
-  --list         Print picker rows (label<TAB>target) and exit
-  --name <path>  Print the session name for a path and exit
+  -h, --help       Show this help
+  --list           Print picker rows (label<TAB>target) and exit
+  --name <path>    Print the session name for a path and exit
+  --create [name]  Make a new project directory and attach
+  --no-sessions    Hide [tmux] rows (combine with --list)
 EOF
 }
 
@@ -56,6 +61,8 @@ sessionizer_picker_rows() {
   while IFS= read -r dir; do
     printf '%s\t%s\n' "$(basename "$dir")" "$dir"
   done < <(sessionizer_list_dirs)
+
+  printf '[ + New ]\tcreate:\n'
 }
 
 need_deps() {
@@ -133,6 +140,32 @@ pick() {
   printf '%s\n' "$target"
 }
 
+# Blank fzf used as a name prompt. Enter prints the query; Escape cancels.
+prompt_new_name() {
+  local header="$1"
+  local out
+  out="$(sessionizer_pick_row 'create> ' --bind=enter:print-query --info=hidden --header="$header" </dev/null)" || return 1
+  printf '%s\n' "${out%%$'\n'*}"
+}
+
+prompt_new_project() {
+  local name dir header root err=""
+  root="$(sessionizer_create_root)"
+  while true; do
+    header="New folder in ${root}"
+    [[ -z $err ]] || header="${err}  |  ${header}"
+    name="$(prompt_new_name "$header")" || return 1
+    name="${name#"${name%%[![:space:]]*}"}"
+    name="${name%"${name##*[![:space:]]}"}"
+    [[ -n $name ]] || return 1
+    if dir="$(sessionizer_create_project "$name" 2>/dev/null)"; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    err="Invalid name"
+  done
+}
+
 has_session() {
   sessionizer_tmux has-session -t "=$1" 2>/dev/null
 }
@@ -168,6 +201,8 @@ create_session() {
 
 user_selected=""
 do_list=0
+do_create=0
+create_name=""
 
 while (($#)); do
   case "$1" in
@@ -185,6 +220,13 @@ while (($#)); do
     }
     sessionizer_name "$2"
     exit 0
+    ;;
+  --create)
+    do_create=1
+    if [[ -n ${2:-} && $2 != -* ]]; then
+      create_name="$2"
+      shift
+    fi
     ;;
   --no-sessions)
     list_sessions=false
@@ -207,6 +249,10 @@ while (($#)); do
 done
 
 if [[ $do_list -eq 1 ]]; then
+  if [[ $do_create -eq 1 ]]; then
+    echo "sessionizer: --list and --create cannot be combined" >&2
+    exit 1
+  fi
   sessionizer_load_config
   sessionizer_picker_rows
   exit 0
@@ -221,10 +267,23 @@ if [[ -z ${TMUX:-} && -t 2 ]]; then
   trap 'code=$?; if ((code != 0)); then printf "\nsessionizer failed (%s). Press enter to close.\n" "$code" >&2; read -r _ || true; fi' EXIT
 fi
 
-if [[ -n $user_selected ]]; then
+if [[ $do_create -eq 1 ]]; then
+  if [[ -n $user_selected ]]; then
+    echo "sessionizer: --create does not take a project argument" >&2
+    exit 1
+  fi
+  if [[ -n $create_name ]]; then
+    selected="$(sessionizer_create_project "$create_name")" || exit 1
+  else
+    selected="$(prompt_new_project)" || exit 0
+  fi
+elif [[ -n $user_selected ]]; then
   selected="$(resolve_query "$user_selected")"
 else
   selected="$(pick)" || exit 0
+  if [[ $selected == create: ]]; then
+    selected="$(prompt_new_project)" || exit 0
+  fi
 fi
 
 if [[ $selected == session:* ]]; then

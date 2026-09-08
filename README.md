@@ -11,7 +11,8 @@ The command name stays `sessionizer`. It attaches or creates a tmux session.
 Super+Alt+Return from the desktop launches that picker.
 
 Ctrl+F inside tmux (or Super+Alt+Return from the desktop) lists the folders
-in `~/Work`, plus `~/.config`. Picking one attaches:
+in `~/Work`, plus `~/.config`. `[ + New ]` makes a new folder under `~/Work`
+and attaches. Picking an existing row attaches:
 
 | Window | Contents |
 | --- | --- |
@@ -102,9 +103,10 @@ No Super+Alt+Return equivalent. Existing sessions are not rebuilt.
 ## Usage
 
 ```
-sessionizer              # fzf picker
+sessionizer              # fzf picker ([ + New ] makes a new ~/Work folder)
 sessionizer ~/Work/foo   # jump straight there
 sessionizer foo          # match a ~/Work child or existing session
+sessionizer --create foo # mkdir ~/Work/foo and attach
 ```
 
 Inside tmux the picker is a popup. Outside tmux, fzf runs in the current

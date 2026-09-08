@@ -76,6 +76,49 @@ sessionizer_name() {
   printf '%s\n' "${base#.}" | tr '.:' '__'
 }
 
+# First SESSIONIZER_ROOTS entry. New projects from [ + New ] land here.
+sessionizer_create_root() {
+  local root="${SESSIONIZER_ROOTS[0]}"
+  root="${root/#\~/$HOME}"
+  printf '%s\n' "${root%/}"
+}
+
+# Single path component for a new project directory. Rejects empty names,
+# '.'/'..', slashes, and control characters.
+sessionizer_sanitize_project_name() {
+  local name="$1"
+  name="${name#"${name%%[![:space:]]*}"}"
+  name="${name%"${name##*[![:space:]]}"}"
+  if [[ -z $name ]]; then
+    echo "sessionizer: project name is empty" >&2
+    return 1
+  fi
+  if [[ $name == */* ]]; then
+    echo "sessionizer: project name cannot contain '/'" >&2
+    return 1
+  fi
+  if [[ $name == . || $name == .. ]]; then
+    echo "sessionizer: invalid project name: $name" >&2
+    return 1
+  fi
+  if [[ $name == *[[:cntrl:]]* ]]; then
+    echo "sessionizer: project name contains control characters" >&2
+    return 1
+  fi
+  printf '%s\n' "$name"
+}
+
+# mkdir -p the first root and $root/$name. Prints the new (or existing) path.
+sessionizer_create_project() {
+  local name dir root
+  name="$(sessionizer_sanitize_project_name "$1")" || return 1
+  root="$(sessionizer_create_root)"
+  mkdir -p "$root" || return 1
+  dir="$root/$name"
+  mkdir -p "$dir" || return 1
+  printf '%s\n' "$dir"
+}
+
 # Extra rows that are themselves sessions (not scanned for children).
 sessionizer_list_extras() {
   local extra

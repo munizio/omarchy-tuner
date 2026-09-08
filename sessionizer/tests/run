@@ -45,6 +45,22 @@ assert_eq "name colons to underscores" "$(sessionizer_name /tmp/foo:bar)" "foo_b
 assert_eq "name trailing slash" "$(sessionizer_name /tmp/proj/)" "proj"
 assert_eq "name strips leading dot" "$(sessionizer_name /tmp/.config)" "config"
 
+# --- create: sanitize + mkdir under first root ---
+SESSIONIZER_ROOTS=("$WORKDIR/Work")
+assert_eq "create root is first SESSIONIZER_ROOTS" "$(sessionizer_create_root)" "$WORKDIR/Work"
+assert_eq "sanitize trims spaces" "$(sessionizer_sanitize_project_name '  my-app  ')" "my-app"
+assert_eq "sanitize keeps hidden name" "$(sessionizer_sanitize_project_name .hidden)" ".hidden"
+assert_ok "sanitize rejects empty" '! sessionizer_sanitize_project_name "" >/dev/null 2>&1'
+assert_ok "sanitize rejects slash" '! sessionizer_sanitize_project_name foo/bar >/dev/null 2>&1'
+assert_ok "sanitize rejects dot" '! sessionizer_sanitize_project_name . >/dev/null 2>&1'
+assert_ok "sanitize rejects dotdot" '! sessionizer_sanitize_project_name .. >/dev/null 2>&1'
+created="$(sessionizer_create_project new-app)"
+assert_eq "create_project path" "$created" "$WORKDIR/Work/new-app"
+assert_ok "create_project mkdir" '[[ -d $WORKDIR/Work/new-app ]]'
+again="$(sessionizer_create_project new-app)"
+assert_eq "create_project is idempotent" "$again" "$WORKDIR/Work/new-app"
+unset SESSIONIZER_ROOTS
+
 # --- directory listing, depth 1 ---
 mkdir -p "$WORKDIR/Work/oh-my-pi" "$WORKDIR/Work/sessionizer" "$WORKDIR/Work/tries/nested" "$WORKDIR/Work/.hidden" "$WORKDIR/.config/sessionizer"
 SESSIONIZER_ROOTS=("$WORKDIR/Work")
@@ -120,6 +136,8 @@ EOF
 tmux -L "$SESSIONIZER_TMUX_SOCKET" kill-server >/dev/null 2>&1 || true
 
 list="$("$ROOT/bin/sessionizer" --list --no-sessions)"
+assert_ok "cli --list has create row" 'grep -qx "\[ + New \]	create:" <<<"$list"'
+assert_eq "cli --list create is last" "$(tail -n1 <<<"$list")" $'[ + New ]\tcreate:'
 assert_ok "cli --list has sessionizer" 'grep -q "sessionizer	" <<<"$list"'
 assert_ok "cli --list has oh-my-pi" 'grep -q "oh-my-pi	" <<<"$list"'
 assert_ok "cli --list has tries" 'grep -q "tries	" <<<"$list"'
@@ -139,6 +157,20 @@ if tmux -L "$SESSIONIZER_TMUX_SOCKET" has-session -t '=sessionizer' 2>/dev/null;
   assert_ok "right pane is harness" 'grep -q sessionizer-harness <<<"$panes"'
 else
   printf 'FAIL created detached session\n'
+  fail=$((fail + 1))
+fi
+tmux -L "$SESSIONIZER_TMUX_SOCKET" kill-server >/dev/null 2>&1 || true
+
+# --- --create NAME (detached, private tmux server) ---
+assert_ok "cli --create rejects slash" '! "$ROOT/bin/sessionizer" --create foo/bar </dev/null >/dev/null 2>&1'
+"$ROOT/bin/sessionizer" --create brand-new </dev/null >/dev/null 2>&1 || true
+assert_ok "cli --create makes dir" '[[ -d $WORKDIR/Work/brand-new ]]'
+if tmux -L "$SESSIONIZER_TMUX_SOCKET" has-session -t '=brand-new' 2>/dev/null; then
+  windows="$(tmux -L "$SESSIONIZER_TMUX_SOCKET" list-windows -t brand-new -F '#{window_name}:#{window_panes}')"
+  assert_ok "create session has nvim window" 'grep -q "^nvim:1$" <<<"$windows"'
+  assert_ok "create session has scratch window" 'grep -q "^scratch:2$" <<<"$windows"'
+else
+  printf 'FAIL created session via --create\n'
   fail=$((fail + 1))
 fi
 tmux -L "$SESSIONIZER_TMUX_SOCKET" kill-server >/dev/null 2>&1 || true
