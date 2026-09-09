@@ -502,6 +502,7 @@ upsert_block "$HOME/.config/tmux/tmux.conf" "$mark_begin" "$mark_end" "$tmux_blo
 
 # Hyprland bindings.lua / input.lua / looknfeel.lua use Lua comments.
 # bindings: Sessionizer, Ctrl+workspace, mouse:275 flick between workspaces.
+# input: caps-as-ctrl, touchpad, three-finger workspace swipe.
 # looknfeel: workspace slide animation (Omarchy default is off).
 bindings_body="$(awk '/^-- omarchy-tuner:begin$/{p=1;next} /^-- omarchy-tuner:end$/{p=0} p' "$ROOT/share/bindings.lua")"
 upsert_block "$HOME/.config/hypr/bindings.lua" "$lua_begin" "$lua_end" "$bindings_body"

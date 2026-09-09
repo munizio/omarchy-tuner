@@ -14,4 +14,9 @@ hl.config({
     },
   },
 })
+
+-- Three-finger horizontal swipe → workspace (1:1). Commit/cancel uses
+-- the workspaces slide animation in looknfeel.lua. Invert default
+-- matches mouse:275 (fingers right → previous ID).
+hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 -- omarchy-tuner:end
