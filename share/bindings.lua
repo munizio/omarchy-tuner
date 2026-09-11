@@ -3,6 +3,10 @@
 hl.unbind("SUPER + ALT + RETURN")
 o.bind("SUPER + ALT + RETURN", "Sessionizer", "omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer")
 
+-- Note: SUPER+SHIFT+A was previously bound to ChatGPT (webapp).
+hl.unbind("SUPER + SHIFT + A")
+o.bind("SUPER + SHIFT + A", "Grok", { webapp = "https://grok.com" })
+
 -- Workspace navigation without Super. Super+number / Super+Tab stay as-is.
 for workspace = 1, 10 do
   local key = "code:" .. tostring(workspace + 9)

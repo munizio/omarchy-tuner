@@ -61,7 +61,7 @@ blocks and `sessionizer.hook` / `omarchy-tune.hook`.
 | `~/.bashrc` | `source` of `sessionizer/share/bashrc` |
 | `~/.config/tmux/tmux.conf` | `source-file` of `sessionizer/share/tmux.conf` and `share/tmux.binds.conf`. `omarchy refresh tmux` overwrites this file; the post-update hook re-adds the block. |
 | `~/.grok/config.toml` | Sets `[ui] screen_mode = "minimal"`. Only written if `grok` is on PATH or the file already exists. |
-| `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Ctrl+1–0 / H / L workspace navigation and mouse:275 + horizontal flick (adjacent IDs, no wrap, empty neighbor allowed). Super+number stays. |
+| `~/.config/hypr/bindings.lua` | Unbind Super+Alt+Return (was `omarchy-launch-terminal-tmux` → single session named `Work`) and bind Sessionizer. Also Super+Shift+A rebinds ChatGPT → Grok (Super+Shift+Alt+A stays Grok). Also Ctrl+1–0 / H / L workspace navigation and mouse:275 + horizontal flick (adjacent IDs, no wrap, empty neighbor allowed). Super+number stays. |
 | `~/.config/hypr/input.lua` | `kb_options = "ctrl:nocaps"` (Caps Lock as Ctrl; Omarchy ships `compose:caps`). Mouse and touchpad `natural_scroll = true`. Touchpad `disable_while_typing = true`, `clickfinger_behavior = true`, `tap_to_click = false`. Three-finger horizontal swipe is Hyprland's 1:1 workspace gesture (desktop follows fingers; commit/cancel uses the `workspaces` slide animation). |
 | `~/.config/hypr/looknfeel.lua` | Enables `workspaces` slide animation (Omarchy ships it disabled). |
 | `~/.config/omarchy/extensions/omarchy-menu.jsonc` | Removes a leftover `sessionizer` row if present. Super+Alt+Return stays. |
