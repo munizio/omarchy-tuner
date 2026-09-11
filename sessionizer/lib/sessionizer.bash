@@ -167,13 +167,34 @@ sessionizer_agent_argv() {
   esac
 }
 
+# Pseudo-vim keys shared by every interactive picker. Escape enters normal
+# mode: j/k/h/l move, g/G jump to first/last, q aborts. i returns to insert;
+# a second Escape aborts, and Enter still accepts. Normal mode shows "[N] "
+# and the insert-mode prompt is restored when going back.
+sessionizer_fzf_vim_bindings() {
+  local p="$1"
+  printf '%s\n' \
+    '--bind=start:unbind(j,k,h,l,g,G,q,i)' \
+    '--bind=j:down' \
+    '--bind=k:up' \
+    '--bind=h:backward-char' \
+    '--bind=l:forward-char' \
+    '--bind=g:first' \
+    '--bind=G:last' \
+    '--bind=q:abort' \
+    "--bind=esc:transform:[[ \$FZF_PROMPT == '[N] '* ]] && echo abort || printf 'change-prompt([N] %s)+rebind(j,k,h,l,g,G,q,i)' '$p'" \
+    "--bind=i:transform:printf 'change-prompt(%s)+unbind(j,k,h,l,g,G,q,i)' '$p'"
+}
+
 # Project picker. Inside tmux this is fzf's own popup (--tmux).
 sessionizer_pick_row() {
   local prompt="${1:-session> }"
   shift
   local -a args=(--prompt="$prompt" --reverse --info=inline)
   args+=("$(sessionizer_fzf_display_args)")
-  fzf "${args[@]}" "$@"
+  local -a vim
+  mapfile -t vim < <(sessionizer_fzf_vim_bindings "$prompt")
+  fzf "${args[@]}" "${vim[@]}" "$@"
 }
 
 sessionizer_resolve_editor() {

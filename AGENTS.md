@@ -109,10 +109,11 @@ hidden dirs. `tries` is one row, not its children. `~/.config` is also
 one row (`SESSIONIZER_EXTRAS`); its children are not listed.
 
 Picking `[ + New ]` opens a second fzf prompt for a directory name (Enter
-prints the query; Escape cancels). The new folder is an immediate child of
-the first `SESSIONIZER_ROOTS` entry (`~/Work` by default). Names cannot
-contain `/`. If that directory already exists, it is reused. Then the usual
-new-session layout runs. `sessionizer --create <name>` skips the pickers.
+prints the query; Escape twice, or Escape then `q`, cancels). The new folder
+is an immediate child of the first `SESSIONIZER_ROOTS` entry (`~/Work` by
+default). Names cannot contain `/`. If that directory already exists, it is
+reused. Then the usual new-session layout runs. `sessionizer --create <name>`
+skips the pickers.
 The name prompt is fzf, not `read` — Ctrl+F is `run-shell -b` and has no TTY.
 
 Session name = `basename` with a leading `.` stripped, then `.` and `:` → `_`
@@ -130,6 +131,12 @@ Outside tmux, fzf is fullscreen in the current terminal, then attach.
 Hyprland launches via `omarchy-launch-tui`; if sessionizer exits non-zero in
 a non-tmux TTY it pauses so the window does not flash closed. fzf cancel is
 exit 0.
+
+Every interactive picker (project list, new-name prompt, harness list) has a
+pseudo-vim normal mode from `sessionizer_fzf_vim_bindings`: Escape enters it
+(prompt shows `[N] `), `j`/`k`/`h`/`l` move, `g`/`G` jump to first/last, `q`
+aborts. `i` returns to insert; a second Escape aborts. Enter still accepts.
+No new dependency — it is all fzf `--bind`/`transform` actions (fzf ≥ 0.53).
 
 Private tmux server for tests: `SESSIONIZER_TMUX_SOCKET=...`.
 
@@ -164,7 +171,8 @@ per-window off is required so names stay `nvim` / `scratch`.
 ### Harness pane
 
 `sessionizer-harness` loops: fzf list → run agent → on exit, list again.
-Escape on fzf re-prompts. `shell` is `exec $SHELL` and leaves the loop.
+Escape on fzf enters normal mode (see below); `q` or a second Escape re-prompts.
+`shell` is `exec $SHELL` and leaves the loop.
 
 Roster, in order: `grok pi omp`, then `shell`. Only binaries on `PATH` are
 shown; `shell` is always last. Launch flags must match `omarchy-agent --inline`:
@@ -189,6 +197,7 @@ the selector UI.
 | tmux | prefix+f (`C-a f`) | Same `run-shell -b sessionizer` |
 | bash, not in tmux | Ctrl+F | Inserts `sessionizer` + newline. **Do not use `bind -x`** — fzf gets no TTY. |
 | nvim, not in tmux | `<C-f>` | `sessionizer/share/sessionizer.lua` |
+| fzf pickers | Escape | Pseudo-vim normal mode (`[N] ` prompt): `j`/`k`/`h`/`l` move, `g`/`G` first/last, `q` aborts. `i` returns to insert; second Escape aborts. |
 | Hyprland | Super+Alt+Return | `omarchy-launch-tui --app-id=org.omarchy.sessionizer sessionizer`. Previously the single `Work` session. |
 | Hyprland | Ctrl+1–0 | Switch to workspace 1–10. Super+number is unchanged. |
 | Hyprland | Ctrl+H / Ctrl+L | Previous / next workspace. |

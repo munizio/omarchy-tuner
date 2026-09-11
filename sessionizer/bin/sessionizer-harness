@@ -63,7 +63,11 @@ command -v fzf >/dev/null 2>&1 || {
 }
 
 pick() {
-  sessionizer_list_harnesses | fzf --prompt='harness> ' --height=100% --reverse --info=inline
+  local prompt='harness> '
+  local -a vim
+  mapfile -t vim < <(sessionizer_fzf_vim_bindings "$prompt")
+  sessionizer_list_harnesses |
+    fzf --prompt="$prompt" --height=100% --reverse --info=inline "${vim[@]}"
 }
 
 run_choice() {
